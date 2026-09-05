@@ -3327,12 +3327,12 @@ export default function AdminDashboard({ onBackToSite }) {
          ======================================================================= */}
       {fullScreenPreview && (
         <div 
-          className="fixed inset-0 z-[100] flex flex-col justify-between bg-black/95 backdrop-blur-md p-3 sm:p-6 animate-fade"
+          className="pms-lightbox-overlay"
           onClick={() => setFullScreenPreview(null)}
         >
           {/* Header Bar */}
           <div 
-            className="w-full max-w-6xl mx-auto flex items-center justify-between pb-3 text-white select-none z-10 shrink-0 border-b border-white/10"
+            className="pms-lightbox-header"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Go Back Button & Title */}
@@ -3340,7 +3340,7 @@ export default function AdminDashboard({ onBackToSite }) {
               <button
                 type="button"
                 onClick={() => setFullScreenPreview(null)}
-                className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-semibold text-xs tracking-wider uppercase transition-colors shrink-0"
+                className="pms-lightbox-back-btn"
                 title="Go back to dashboard (or press Esc)"
               >
                 <ArrowLeft size={16} /> Go Back
@@ -3360,7 +3360,7 @@ export default function AdminDashboard({ onBackToSite }) {
             {/* Current Slide Counter & Badges */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {fullScreenPreview.images && fullScreenPreview.images.length > 1 && (
-                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[0.7rem] sm:text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[0.72rem] sm:text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm">
                   {fullScreenPreview.currentIndex + 1} / {fullScreenPreview.images.length}
                 </span>
               )}
@@ -3369,20 +3369,22 @@ export default function AdminDashboard({ onBackToSite }) {
                 Full Size • No Zoom
               </span>
 
+              {/* High-Visibility Close (X) Button */}
               <button
                 type="button"
                 onClick={() => setFullScreenPreview(null)}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 active:bg-white/35 text-white flex items-center justify-center transition-colors"
-                title="Close full-size preview"
+                className="pms-lightbox-close-btn"
+                title="Close full-size preview (Esc)"
               >
-                <X size={20} />
+                <span className="hidden sm:inline font-bold">Close</span>
+                <X size={20} strokeWidth={2.5} />
               </button>
             </div>
           </div>
 
-          {/* Main Stage with Side Arrows (Desktop & Mobile) & Touch Swipe */}
+          {/* Main Stage with Floating High-Visibility Arrows (Desktop & Mobile) */}
           <div 
-            className="w-full max-w-6xl mx-auto flex-grow flex items-center justify-between relative my-2 sm:my-4 overflow-hidden select-none"
+            className="pms-lightbox-stage-container"
             onClick={(e) => e.stopPropagation()}
             onTouchStart={(e) => {
               touchStartXRef.current = e.touches[0]?.clientX || 0;
@@ -3409,8 +3411,8 @@ export default function AdminDashboard({ onBackToSite }) {
               touchStartXRef.current = null;
             }}
           >
-            {/* Previous Image Arrow */}
-            {fullScreenPreview.images && fullScreenPreview.images.length > 1 ? (
+            {/* Previous Image Arrow - Big, Golden, Floating, Super Visible */}
+            {fullScreenPreview.images && fullScreenPreview.images.length > 1 && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -3420,15 +3422,15 @@ export default function AdminDashboard({ onBackToSite }) {
                     currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
                   }));
                 }}
-                className="z-20 w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-900/80 hover:bg-amber-500 text-white hover:text-slate-950 border border-white/20 hover:border-amber-400 shadow-2xl flex items-center justify-center transition-all shrink-0 active:scale-95"
+                className="pms-lightbox-nav-arrow prev"
                 title="Swap to previous image (or press Left Arrow)"
               >
-                <ChevronLeft size={28} />
+                <ChevronLeft size={30} strokeWidth={2.5} />
               </button>
-            ) : <div className="w-11 sm:w-14" />}
+            )}
 
             {/* Central Uncropped Image Container */}
-            <div className="flex-grow flex items-center justify-center px-2 sm:px-6 max-h-[74vh] overflow-hidden">
+            <div className="pms-lightbox-image-wrap">
               <img
                 key={fullScreenPreview.currentIndex}
                 src={
@@ -3437,15 +3439,12 @@ export default function AdminDashboard({ onBackToSite }) {
                     : fullScreenPreview.images?.[fullScreenPreview.currentIndex]?.url || fullScreenPreview.url
                 }
                 alt={fullScreenPreview.title}
-                className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl transition-all duration-300 animate-fade"
-                style={{
-                  imageRendering: 'high-quality',
-                }}
+                className="animate-fade"
               />
             </div>
 
-            {/* Next Image Arrow */}
-            {fullScreenPreview.images && fullScreenPreview.images.length > 1 ? (
+            {/* Next Image Arrow - Big, Golden, Floating, Super Visible */}
+            {fullScreenPreview.images && fullScreenPreview.images.length > 1 && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -3455,22 +3454,22 @@ export default function AdminDashboard({ onBackToSite }) {
                     currentIndex: (prev.currentIndex + 1) % prev.images.length
                   }));
                 }}
-                className="z-20 w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-900/80 hover:bg-amber-500 text-white hover:text-slate-950 border border-white/20 hover:border-amber-400 shadow-2xl flex items-center justify-center transition-all shrink-0 active:scale-95"
+                className="pms-lightbox-nav-arrow next"
                 title="Swap to next image (or press Right Arrow)"
               >
-                <ChevronRight size={28} />
+                <ChevronRight size={30} strokeWidth={2.5} />
               </button>
-            ) : <div className="w-11 sm:w-14" />}
+            )}
           </div>
 
           {/* Bottom Controls & Thumbnail Strip */}
           <div 
-            className="w-full max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-slate-400 text-xs select-none shrink-0 border-t border-white/10"
+            className="pms-lightbox-footer"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Quick Thumbnail Swapper Strip */}
             {fullScreenPreview.images && fullScreenPreview.images.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto py-1 max-w-full">
+              <div className="pms-lightbox-thumb-strip">
                 {fullScreenPreview.images.map((imgItem, idx) => {
                   const imgUrl = typeof imgItem === 'string' ? imgItem : imgItem.url;
                   const isCurrent = idx === fullScreenPreview.currentIndex;
@@ -3479,14 +3478,10 @@ export default function AdminDashboard({ onBackToSite }) {
                       key={idx}
                       type="button"
                       onClick={() => setFullScreenPreview(prev => ({ ...prev, currentIndex: idx }))}
-                      className={`w-12 h-9 sm:w-14 sm:h-10 rounded-md overflow-hidden shrink-0 transition-all border-2 ${
-                        isCurrent 
-                          ? 'border-amber-400 scale-105 shadow-md shadow-amber-500/20' 
-                          : 'border-white/20 opacity-50 hover:opacity-100 hover:border-white/50'
-                      }`}
+                      className={`pms-lightbox-thumb-btn ${isCurrent ? 'active' : ''}`}
                       title={`Swap to image ${idx + 1}`}
                     >
-                      <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
                     </button>
                   );
                 })}
@@ -3495,13 +3490,13 @@ export default function AdminDashboard({ onBackToSite }) {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-              <span className="text-[0.7rem] text-slate-400 truncate max-w-[200px] sm:max-w-xs">
-                Use arrows or tap thumbnails to swap
+              <span className="text-[0.72rem] text-slate-300 truncate max-w-[200px] sm:max-w-xs">
+                Use arrows, swipe, or tap thumbnails
               </span>
               <button
                 type="button"
                 onClick={() => setFullScreenPreview(null)}
-                className="px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs transition-colors shrink-0 flex items-center gap-1.5"
+                className="pms-lightbox-back-btn"
               >
                 <ArrowLeft size={14} /> Go Back
               </button>
