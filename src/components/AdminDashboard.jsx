@@ -48,6 +48,7 @@ import { useAppContext } from '../context/AppContext';
 import { uploadResortImageToStorage } from '../services/firebaseService';
 import { isFirebaseConfigured } from '../firebase';
 import { uploadImageToPublicCDN, RESORT_PHOTO_PRESETS } from '../services/imageUploadService';
+import { formatReservationWhatsAppMessage, getWhatsAppUrl } from '../services/whatsappService';
 
 export default function AdminDashboard({ onBackToSite }) {
   const { 
@@ -2969,9 +2970,20 @@ export default function AdminDashboard({ onBackToSite }) {
                             <h4 className="font-bold text-slate-900 text-sm sm:text-base">{booking.guestName}</h4>
                             <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1">
                               {booking.phone && (
-                                <a href={`tel:${booking.phone}`} className="text-amber-800 font-semibold flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 hover:bg-amber-100">
-                                  📞 {booking.phone}
-                                </a>
+                                <>
+                                  <a href={`tel:${booking.phone}`} className="text-amber-800 font-semibold flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 hover:bg-amber-100">
+                                    📞 {booking.phone}
+                                  </a>
+                                  <a 
+                                    href={getWhatsAppUrl(booking.phone, formatReservationWhatsAppMessage(booking))}
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-emerald-800 font-semibold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                    title="Send WhatsApp Confirmation Voucher to Guest"
+                                  >
+                                    💬 WhatsApp
+                                  </a>
+                                </>
                               )}
                               {booking.email && (
                                 <a href={`mailto:${booking.email}`} className="text-slate-600 hover:text-slate-900 flex items-center gap-1 text-[0.75rem]">

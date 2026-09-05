@@ -12,10 +12,18 @@ import {
   XCircle,
   CreditCard,
   Sparkles,
-  Lock
+  Lock,
+  Send,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { initiateRazorpayPayment, isPlaceholderRazorpayKey } from '../services/razorpayService';
+import { 
+  formatReservationWhatsAppMessage, 
+  getWhatsAppUrl, 
+  RESORT_WHATSAPP_PRIMARY 
+} from '../services/whatsappService';
 
 export default function BookingForm({ preselectedRoomId }) {
   const { rooms, addBooking, getEffectivePrice, getRoomInventory } = useAppContext();
@@ -56,11 +64,49 @@ export default function BookingForm({ preselectedRoomId }) {
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bookingId, setBookingId] = useState('');
+  const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+  const [autoSentWhatsApp, setAutoSentWhatsApp] = useState(false);
 
   const payableNow = paymentOption === 'full' 
     ? bookingSummary.total 
     : (paymentOption === 'advance' ? Math.round(bookingSummary.total / 2) : 0);
   const balanceDue = bookingSummary.total - payableNow;
+
+  // Auto-trigger WhatsApp reservation voucher to guest upon confirmation
+  useEffect(() => {
+    if (isSubmitted && formData.phone && !autoSentWhatsApp) {
+      setAutoSentWhatsApp(true);
+      const timer = setTimeout(() => {
+        try {
+          const currentBooking = {
+            id: bookingId,
+            guestName: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            roomName: selectedRoom?.name || 'Luxury Stay',
+            guests: formData.guests,
+            checkIn: formData.checkIn,
+            checkOut: formData.checkOut,
+            nights: bookingSummary.nights,
+            amount: bookingSummary.total,
+            paidAmount: paymentResult?.paidAmount || 0,
+            balanceAmount: paymentResult?.balanceAmount || 0,
+            paymentStatus: paymentResult?.paymentId ? (paymentOption === 'full' ? 'paid' : 'advance_paid') : 'pay_at_checkin',
+            paymentMethod: paymentResult?.method || (paymentResult?.paymentId ? 'Razorpay Online' : 'Pay on Arrival'),
+            paymentId: paymentResult?.paymentId || null,
+            basePrice: bookingSummary.basePrice,
+            tax: bookingSummary.tax
+          };
+          const msg = formatReservationWhatsAppMessage(currentBooking);
+          const url = getWhatsAppUrl(formData.phone, msg);
+          window.open(url, '_blank');
+        } catch (e) {
+          console.warn('WhatsApp auto-launch notice:', e);
+        }
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isSubmitted, formData, bookingId, paymentResult, paymentOption, bookingSummary, selectedRoom, autoSentWhatsApp]);
 
   useEffect(() => {
     if (preselectedRoomId) {
@@ -201,6 +247,30 @@ export default function BookingForm({ preselectedRoomId }) {
   };
 
   if (isSubmitted) {
+    const currentConfirmedBooking = {
+      id: bookingId,
+      guestName: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      roomName: selectedRoom?.name || 'Luxury Stay',
+      guests: formData.guests,
+      checkIn: formData.checkIn,
+      checkOut: formData.checkOut,
+      nights: bookingSummary.nights,
+      amount: bookingSummary.total,
+      paidAmount: paymentResult?.paidAmount || 0,
+      balanceAmount: paymentResult?.balanceAmount || 0,
+      paymentStatus: paymentResult?.paymentId ? (paymentOption === 'full' ? 'paid' : 'advance_paid') : 'pay_at_checkin',
+      paymentMethod: paymentResult?.method || (paymentResult?.paymentId ? 'Razorpay Online' : 'Pay on Arrival'),
+      paymentId: paymentResult?.paymentId || null,
+      basePrice: bookingSummary.basePrice,
+      tax: bookingSummary.tax
+    };
+
+    const whatsAppVoucherText = formatReservationWhatsAppMessage(currentConfirmedBooking);
+    const guestWhatsAppUrl = getWhatsAppUrl(formData.phone, whatsAppVoucherText);
+    const resortDeskWhatsAppUrl = getWhatsAppUrl(RESORT_WHATSAPP_PRIMARY, whatsAppVoucherText);
+
     return (
       <section className="py-24 bg-bg-light min-h-[85vh] flex items-center anim-fade">
         <div className="container max-w-xl">
@@ -291,6 +361,73 @@ export default function BookingForm({ preselectedRoomId }) {
                 <div className="flex justify-between text-sm font-bold text-primary-deep pt-3 border-t border-dashed border-border-light">
                   <span className="uppercase tracking-widest">GRAND TOTAL</span>
                   <span className="text-accent-gold font-display text-lg">₹{bookingSummary.total}</span>
+                </div>
+              </div>
+
+              {/* WhatsApp Reservation Confirmation Card */}
+              <div className="p-4 sm:p-5 rounded-xl bg-emerald-50/90 border-2 border-emerald-500/70 text-left space-y-3.5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+                      <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-emerald-950 uppercase tracking-wider">
+                        WhatsApp Confirmation Sent
+                      </h4>
+                      <p className="text-[0.72rem] text-emerald-800 mt-0.5">
+                        Delivering voucher to guest: <span className="font-mono font-bold text-emerald-950">{formData.phone}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[0.62rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
+                    Instant
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <a
+                    href={guestWhatsAppUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md text-center"
+                  >
+                    <Send size={14} /> Open on WhatsApp
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(whatsAppVoucherText);
+                      setCopiedWhatsApp(true);
+                      setTimeout(() => setCopiedWhatsApp(false), 2500);
+                    }}
+                    className="w-full py-2.5 px-4 rounded-lg bg-white hover:bg-slate-100 active:scale-98 text-emerald-900 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                  >
+                    {copiedWhatsApp ? (
+                      <>
+                        <Check size={14} className="text-emerald-600" /> Voucher Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} /> Copy Voucher
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-emerald-200/60 flex flex-col sm:flex-row sm:items-center justify-between text-[0.68rem] text-emerald-800 gap-1">
+                  <span>Need instant route help or front-desk check-in?</span>
+                  <a
+                    href={resortDeskWhatsAppUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold underline hover:text-emerald-950 flex items-center gap-1"
+                  >
+                    Resort Helpdesk (+91 70555 22239)
+                  </a>
                 </div>
               </div>
 
