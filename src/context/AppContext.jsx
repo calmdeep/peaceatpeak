@@ -1,4 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { isFirebaseConfigured } from '../firebase';
+import {
+  subscribeToRooms,
+  syncRoomToFirestore,
+  seedInitialRoomsIfEmpty,
+  subscribeToBookings,
+  syncBookingToFirestore,
+  updateBookingStatusInFirestore,
+  deleteBookingFromFirestore,
+  subscribeToPropertySpaces,
+  syncPropertySpaceToFirestore,
+  subscribeToHeroSlides,
+  syncHeroSlidesToFirestore
+} from '../services/firebaseService';
 
 export const DEFAULT_ROOMS = [
   {
@@ -369,6 +383,54 @@ export function AppProvider({ children }) {
     };
   }, []);
 
+  // Real-Time Firebase Cloud Firestore Synchronization
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return;
+
+    // Seed default rooms to Firestore if newly created database
+    seedInitialRoomsIfEmpty(DEFAULT_ROOMS);
+
+    // 1. Rooms Live Subscription
+    const unsubRooms = subscribeToRooms((cloudRooms) => {
+      if (Array.isArray(cloudRooms) && cloudRooms.length > 0) {
+        setRooms(prev => {
+          return DEFAULT_ROOMS.map(defRoom => {
+            const match = cloudRooms.find(cr => cr.id === defRoom.id);
+            return match ? { ...defRoom, ...match } : defRoom;
+          });
+        });
+      }
+    });
+
+    // 2. Bookings Live Subscription
+    const unsubBookings = subscribeToBookings((cloudBookings) => {
+      if (Array.isArray(cloudBookings)) {
+        setBookings(cloudBookings);
+      }
+    });
+
+    // 3. Property Spaces Live Subscription
+    const unsubSpaces = subscribeToPropertySpaces((cloudSpaces) => {
+      if (Array.isArray(cloudSpaces) && cloudSpaces.length > 0) {
+        setPropertySpaces(cloudSpaces);
+      }
+    });
+
+    // 4. Hero Slides Live Subscription
+    const unsubHero = subscribeToHeroSlides((cloudSlides) => {
+      if (Array.isArray(cloudSlides) && cloudSlides.length > 0) {
+        setHeroSlides(cloudSlides);
+      }
+    });
+
+    return () => {
+      unsubRooms?.();
+      unsubBookings?.();
+      unsubSpaces?.();
+      unsubHero?.();
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem('pap_bookings_data', JSON.stringify(bookings));
@@ -416,13 +478,18 @@ export function AppProvider({ children }) {
 
   // Rooms Management
   const updateRoom = (roomId, updates) => {
-    setRooms(prev => prev.map(room => (room.id === roomId ? { ...room, ...updates } : room)));
+    setRooms(prev => {
+      const next = prev.map(room => (room.id === roomId ? { ...room, ...updates } : room));
+      const target = next.find(r => r.id === roomId);
+      if (target) syncRoomToFirestore(roomId, target);
+      return next;
+    });
   };
 
   const addRoomImage = (roomId, imageUrl) => {
     if (!imageUrl) return;
-    setRooms(prev =>
-      prev.map(room => {
+    setRooms(prev => {
+      const next = prev.map(room => {
         if (room.id === roomId) {
           const updatedImages = [...(room.images || []), imageUrl];
           return {
@@ -432,13 +499,16 @@ export function AppProvider({ children }) {
           };
         }
         return room;
-      })
-    );
+      });
+      const target = next.find(r => r.id === roomId);
+      if (target) syncRoomToFirestore(roomId, target);
+      return next;
+    });
   };
 
   const removeRoomImage = (roomId, imageIndex) => {
-    setRooms(prev =>
-      prev.map(room => {
+    setRooms(prev => {
+      const next = prev.map(room => {
         if (room.id === roomId && room.images) {
           const newImages = room.images.filter((_, idx) => idx !== imageIndex);
           return {
@@ -448,13 +518,16 @@ export function AppProvider({ children }) {
           };
         }
         return room;
-      })
-    );
+      });
+      const target = next.find(r => r.id === roomId);
+      if (target) syncRoomToFirestore(roomId, target);
+      return next;
+    });
   };
 
   const setRoomPrimaryImage = (roomId, imageIndex) => {
-    setRooms(prev =>
-      prev.map(room => {
+    setRooms(prev => {
+      const next = prev.map(room => {
         if (room.id === roomId && room.images && room.images[imageIndex]) {
           const selectedImg = room.images[imageIndex];
           const reordered = [selectedImg, ...room.images.filter((_, idx) => idx !== imageIndex)];
@@ -465,21 +538,27 @@ export function AppProvider({ children }) {
           };
         }
         return room;
-      })
-    );
+      });
+      const target = next.find(r => r.id === roomId);
+      if (target) syncRoomToFirestore(roomId, target);
+      return next;
+    });
   };
 
   // Property Spaces Management (Dining Hall & Reception Lounge)
   const updatePropertySpace = (spaceId, updates) => {
-    setPropertySpaces(prev =>
-      prev.map(space => (space.id === spaceId ? { ...space, ...updates } : space))
-    );
+    setPropertySpaces(prev => {
+      const next = prev.map(space => (space.id === spaceId ? { ...space, ...updates } : space));
+      const target = next.find(s => s.id === spaceId);
+      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      return next;
+    });
   };
 
   const addSpaceImage = (spaceId, imageUrl) => {
     if (!imageUrl) return;
-    setPropertySpaces(prev =>
-      prev.map(space => {
+    setPropertySpaces(prev => {
+      const next = prev.map(space => {
         if (space.id === spaceId) {
           const updatedImages = [...(space.images || []), imageUrl];
           return {
@@ -489,13 +568,16 @@ export function AppProvider({ children }) {
           };
         }
         return space;
-      })
-    );
+      });
+      const target = next.find(s => s.id === spaceId);
+      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      return next;
+    });
   };
 
   const removeSpaceImage = (spaceId, imageIndex) => {
-    setPropertySpaces(prev =>
-      prev.map(space => {
+    setPropertySpaces(prev => {
+      const next = prev.map(space => {
         if (space.id === spaceId && space.images) {
           const newImages = space.images.filter((_, idx) => idx !== imageIndex);
           return {
@@ -505,13 +587,16 @@ export function AppProvider({ children }) {
           };
         }
         return space;
-      })
-    );
+      });
+      const target = next.find(s => s.id === spaceId);
+      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      return next;
+    });
   };
 
   const setSpacePrimaryImage = (spaceId, imageIndex) => {
-    setPropertySpaces(prev =>
-      prev.map(space => {
+    setPropertySpaces(prev => {
+      const next = prev.map(space => {
         if (space.id === spaceId && space.images && space.images[imageIndex]) {
           const selectedImg = space.images[imageIndex];
           const reordered = [selectedImg, ...space.images.filter((_, idx) => idx !== imageIndex)];
@@ -522,8 +607,11 @@ export function AppProvider({ children }) {
           };
         }
         return space;
-      })
-    );
+      });
+      const target = next.find(s => s.id === spaceId);
+      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      return next;
+    });
   };
 
   // Hero Slides Management
@@ -534,24 +622,20 @@ export function AppProvider({ children }) {
       {
         url: slide.url,
         position: slide.position || 'center center',
-        caption: slide.caption || 'Peace at Peak Resort'
+        caption: slide.caption || ''
       }
     ]);
   };
 
   const removeHeroSlide = (index) => {
-    if (heroSlides.length <= 1) {
-      alert('At least one hero slide must remain active.');
-      return;
-    }
     setHeroSlides(prev => prev.filter((_, idx) => idx !== index));
   };
 
   const reorderHeroSlide = (index, direction) => {
-    const newIdx = direction === 'up' ? index - 1 : index + 1;
-    if (newIdx < 0 || newIdx >= heroSlides.length) return;
     setHeroSlides(prev => {
       const copy = [...prev];
+      const newIdx = direction === 'up' ? index - 1 : index + 1;
+      if (newIdx < 0 || newIdx >= copy.length) return prev;
       const temp = copy[index];
       copy[index] = copy[newIdx];
       copy[newIdx] = temp;
@@ -580,7 +664,10 @@ export function AppProvider({ children }) {
         channel.close();
       }
 
-      // Publish to cloud store for remote devices / mobile phones
+      // Sync to Firebase Cloud Firestore
+      syncHeroSlidesToFirestore(targetSlides);
+
+      // Publish to cloud store fallback for remote devices / mobile phones
       const cloudUrl = 'https://kvdb.io/4y9K3mP8vWq6xT2nZb7L1e/pap_cloud_hero_sync';
       await fetch(cloudUrl, {
         method: 'POST',
@@ -609,9 +696,11 @@ export function AppProvider({ children }) {
       nights: newBooking.nights || 1,
       amount: newBooking.total || newBooking.amount,
       status: 'active',
-      daysAgo: 0
+      daysAgo: 0,
+      createdAt: new Date().toISOString()
     };
     setBookings(prev => [bookingEntry, ...prev]);
+    syncBookingToFirestore(bookingEntry);
     return bookingEntry;
   };
 
@@ -681,10 +770,12 @@ export function AppProvider({ children }) {
     setBookings(prev =>
       prev.map(b => (b.id === bookingId ? { ...b, status: newStatus } : b))
     );
+    updateBookingStatusInFirestore(bookingId, newStatus);
   };
 
   const removeBooking = (bookingId) => {
     setBookings(prev => prev.filter(b => b.id !== bookingId));
+    deleteBookingFromFirestore(bookingId);
   };
 
   // Reset to Factory Defaults
@@ -702,6 +793,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        isFirebaseActive: isFirebaseConfigured(),
         rooms,
         setRooms,
         updateRoom,

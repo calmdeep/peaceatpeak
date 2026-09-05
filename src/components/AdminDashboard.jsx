@@ -45,9 +45,12 @@ import {
   Monitor
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { uploadResortImageToStorage } from '../services/firebaseService';
+import { isFirebaseConfigured } from '../firebase';
 
 export default function AdminDashboard({ onBackToSite }) {
   const { 
+    isFirebaseActive,
     rooms, 
     updateRoom, 
     addRoomImage, 
@@ -432,9 +435,16 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingRoom(true);
     setRoomUploadError('');
     try {
-      const optimizedUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
-      addRoomImage(selectedRoom.id, optimizedUrl);
-      showToast('✅ New room photo optimized and uploaded successfully!');
+      let finalUrl;
+      if (isFirebaseConfigured()) {
+        showToast('☁️ Uploading photo to Google Firebase Cloud Storage...');
+        finalUrl = await uploadResortImageToStorage(file, 'rooms');
+        showToast(`✅ Cloud Upload Success: Photo saved to Firebase Storage!`);
+      } else {
+        finalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+        showToast('✅ Photo saved locally (Connect Firebase in .env for Cloud Storage)');
+      }
+      addRoomImage(selectedRoom.id, finalUrl);
       e.target.value = '';
     } catch (err) {
       console.error(err);
@@ -460,9 +470,16 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingSpace(true);
     setSpaceUploadError('');
     try {
-      const optimizedUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
-      addSpaceImage(selectedSpace.id, optimizedUrl);
-      showToast(`✅ New photo optimized & uploaded to ${selectedSpace.name}!`);
+      let finalUrl;
+      if (isFirebaseConfigured()) {
+        showToast(`☁️ Uploading photo to Firebase Storage for ${selectedSpace.name}...`);
+        finalUrl = await uploadResortImageToStorage(file, 'spaces');
+        showToast(`✅ Uploaded to Google Firebase Cloud Storage for ${selectedSpace.name}!`);
+      } else {
+        finalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+        showToast(`✅ Photo saved locally for ${selectedSpace.name}!`);
+      }
+      addSpaceImage(selectedSpace.id, finalUrl);
       e.target.value = '';
     } catch (err) {
       console.error(err);
@@ -488,17 +505,23 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingHero(true);
     setHeroUploadError('');
     try {
-      const optimizedUrl = await optimizeImageFile(file, 1920, 1080, 0.88);
+      let finalUrl;
+      if (isFirebaseConfigured()) {
+        showToast('☁️ Uploading Hero Slide to Firebase Cloud Storage...');
+        finalUrl = await uploadResortImageToStorage(file, 'hero');
+      } else {
+        finalUrl = await optimizeImageFile(file, 1920, 1080, 0.88);
+      }
       const cleanCaption = newHeroCaption.trim() || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Peace at Peak Resort';
       const newSlide = {
-        url: optimizedUrl,
+        url: finalUrl,
         caption: cleanCaption,
         position: newHeroPosition || 'center center'
       };
       addHeroSlide(newSlide);
       if (publishHeroSlides) publishHeroSlides([...heroSlides, newSlide]);
       setNewHeroCaption('');
-      showToast('✅ High-quality Hero slide uploaded and published live across all panels & devices!');
+      showToast('🚀 Hero slide uploaded & published live across all devices!');
       e.target.value = '';
     } catch (err) {
       console.error('Hero upload error', err);
@@ -819,9 +842,9 @@ export default function AdminDashboard({ onBackToSite }) {
                       Peace at Peak
                     </h2>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className={`w-2 h-2 rounded-full ${isFirebaseActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                       <span className="text-[0.68rem] text-slate-500 font-semibold uppercase tracking-wider">
-                        PMS Console
+                        {isFirebaseActive ? 'Firebase Cloud Active' : 'Local Mode (Firebase Ready)'}
                       </span>
                     </div>
                   </div>
