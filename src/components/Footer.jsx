@@ -36,7 +36,13 @@ export default function Footer({ setActiveTab }) {
               <a href="#" className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-light-secondary hover:text-accent-gold transition-all border border-white/10">
                 <Facebook size={14} />
               </a>
-              <a href="#" className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-light-secondary hover:text-accent-gold transition-all border border-white/10">
+              <a 
+                href="https://www.instagram.com/peaceatpeak_kanatal?igsi=emtwMWdlZHg5NGJs" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                aria-label="Peace at Peak Instagram"
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-light-secondary hover:text-accent-gold transition-all border border-white/10"
+              >
                 <Instagram size={14} />
               </a>
             </div>
