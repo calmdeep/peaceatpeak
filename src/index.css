@@ -1518,6 +1518,38 @@ textarea:focus {
   border-color: rgba(195, 161, 117, 0.2) !important;
 }
 
+/* Navbar Positioning (Mobile Non-Sticky / Desktop Sticky) */
+.site-navbar {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 50;
+  transition: background-color 0.4s ease, border-color 0.4s ease, padding 0.4s ease, box-shadow 0.4s ease;
+}
+
+@media (max-width: 767px) {
+  /* On mobile, remove stickiness completely: navbar scrolls away with page */
+  .site-navbar {
+    position: absolute !important;
+  }
+}
+
+@media (min-width: 768px) {
+  /* On desktop, keep fixed sticky navbar */
+  .site-navbar {
+    position: fixed !important;
+  }
+
+  .site-navbar.navbar-scrolled {
+    background-color: rgba(34, 45, 38, 0.95) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
 /* Navbar contrast classes */
 .navbar-light-bg {
   background-color: rgba(247, 246, 243, 0.85) !important;

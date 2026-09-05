@@ -35,13 +35,13 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
   return (
     <nav 
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
+      className={`site-navbar ${
         isScrolled 
-          ? 'bg-bg-dark/95 backdrop-blur-md shadow-md border-b border-white/5' 
+          ? 'navbar-scrolled' 
           : isLightBg
             ? 'navbar-light-bg'
             : 'bg-transparent'
-      }`}
+      } ${isLightBg ? 'navbar-light-bg' : ''}`}
       style={{
         paddingTop: isScrolled ? 'calc(1.1rem + env(safe-area-inset-top, 0px))' : 'calc(1.8rem + env(safe-area-inset-top, 0px))',
         paddingBottom: isScrolled ? '1.1rem' : '1.8rem',
@@ -153,7 +153,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
       {/* Mobile Drawer (Luxury Editorial Overlay) */}
       <div 
-        className={`fixed top-0 left-0 w-full h-screen bg-bg-dark transition-all duration-500 z-40 md:hidden flex flex-col justify-center items-center ${
+        className={`fixed top-0 left-0 w-full h-screen bg-bg-dark transition-all duration-500 z-[60] md:hidden flex flex-col justify-center items-center ${
           isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
         }`}
         style={{
