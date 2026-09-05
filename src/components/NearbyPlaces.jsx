@@ -5,7 +5,7 @@ const NEARBY_PLACES_DATA = [
   {
     id: 'surkanda_temple',
     name: 'Surkanda Devi Temple',
-    image: '/images/place_temple.jpg',
+    image: '/images/Surkanda-Devi-Temple-22-1024x718.webp',
     category: 'Spiritual',
     distance: '10 km from resort',
     duration: '25 mins drive + 1.5 km trek',
@@ -61,11 +61,11 @@ export default function NearbyPlaces() {
   const categories = ['All', 'Spiritual', 'Nature', 'Adventure'];
 
   const filteredPlaces = NEARBY_PLACES_DATA.filter(place => {
-    const matchesSearch = place.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          place.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
+    const matchesSearch = place.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      place.description.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesCategory = activeCategory === 'All' || place.category === activeCategory;
-    
+
     return matchesSearch && matchesCategory;
   });
 
@@ -75,7 +75,7 @@ export default function NearbyPlaces() {
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
           <span className="luxury-heading-badge">EXPLORATIONS</span>
-          <h2 
+          <h2
             className="text-4xl sm:text-5xl font-light text-primary-deep mt-3 mb-4"
             style={{ fontFamily: 'var(--font-display)' }}
           >
@@ -93,7 +93,7 @@ export default function NearbyPlaces() {
             {/* Search Input (Minimal luxury layout) */}
             <div className="relative w-full sm:flex-grow">
               <Search className="absolute left-1 top-1/2 transform -translate-y-1/2 text-text-dark-secondary" size={16} />
-              <input 
+              <input
                 type="text"
                 placeholder="Search local attractions..."
                 value={searchTerm}
@@ -108,11 +108,10 @@ export default function NearbyPlaces() {
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`px-4 py-2.5 text-xs font-semibold tracking-widest uppercase transition-all ${
-                    activeCategory === cat 
-                      ? 'text-accent-gold border-b border-accent-gold' 
-                      : 'text-text-dark-secondary hover:text-primary-deep'
-                  }`}
+                  className={`px-4 py-2.5 text-xs font-semibold tracking-widest uppercase transition-all ${activeCategory === cat
+                    ? 'text-accent-gold border-b border-accent-gold'
+                    : 'text-text-dark-secondary hover:text-primary-deep'
+                    }`}
                   style={{
                     fontFamily: 'var(--font-display)',
                     whiteSpace: 'nowrap'
@@ -129,24 +128,24 @@ export default function NearbyPlaces() {
         {filteredPlaces.length > 0 ? (
           <div className="grid grid-2 lg:grid-3 gap-8">
             {filteredPlaces.map((place) => (
-              <div 
-                key={place.id} 
+              <div
+                key={place.id}
                 className="luxury-card flex flex-col h-full bg-white relative rounded-2xl"
                 style={{ border: '1px solid rgba(223, 184, 108, 0.15)' }}
               >
                 {/* Image visual with Overlay Text */}
                 <div className="relative h-60 overflow-hidden">
-                  <img 
-                    src={place.image} 
-                    alt={place.name} 
-                    className="w-full h-full object-cover" 
+                  <img
+                    src={place.image}
+                    alt={place.name}
+                    className="w-full h-full object-cover"
                   />
                   {/* Luxury overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-bg-dark/90 via-bg-dark/20 to-transparent pointer-events-none" />
-                  
+
                   {/* Details sitting on Image bottom */}
                   <div className="absolute bottom-4 left-4 right-4 z-10 flex justify-between items-end">
-                    <span 
+                    <span
                       className="bg-accent-gold text-primary-deep text-[0.55rem] tracking-widest font-bold py-1 px-2.5 uppercase"
                     >
                       {place.category}
@@ -160,12 +159,12 @@ export default function NearbyPlaces() {
 
                 {/* Content Details */}
                 <div className="p-6 flex flex-col flex-grow space-y-4">
-                  <h3 
+                  <h3
                     className="text-2xl font-light text-primary-deep font-display leading-tight"
                   >
                     {place.name}
                   </h3>
-                  
+
                   <p className="text-text-dark-secondary text-xs leading-relaxed flex-grow">
                     {place.description}
                   </p>

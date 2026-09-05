@@ -47,6 +47,7 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { uploadResortImageToStorage } from '../services/firebaseService';
 import { isFirebaseConfigured } from '../firebase';
+import { uploadImageToPublicCDN, RESORT_PHOTO_PRESETS } from '../services/imageUploadService';
 
 export default function AdminDashboard({ onBackToSite }) {
   const { 
@@ -158,6 +159,9 @@ export default function AdminDashboard({ onBackToSite }) {
   const [spaceUploadError, setSpaceUploadError] = useState('');
   const [isUploadingSpace, setIsUploadingSpace] = useState(false);
   const [notification, setNotification] = useState('');
+  const [showPresetModal, setShowPresetModal] = useState(false);
+  const [presetTargetType, setPresetTargetType] = useState('room'); // 'room' | 'space'
+  const [presetCategory, setPresetCategory] = useState('All');
 
   // Hero slide form state
   const [newHeroUrl, setNewHeroUrl] = useState('');
@@ -275,21 +279,19 @@ export default function AdminDashboard({ onBackToSite }) {
     const file = e.target.files?.[0];
     if (!file || !selectedRoom) return;
     try {
-      showToast('⚡ Optimizing and updating photo in real-time...');
-      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      showToast('⚡ Updating photo with high-speed CDN...');
+      const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
       replaceRoomImage(selectedRoom.id, index, optimizedLocalUrl);
       showToast(`✅ Photo #${index + 1} updated in real-time!`);
       e.target.value = '';
 
-      if (isFirebaseConfigured()) {
-        uploadResortImageToStorage(file, 'rooms')
-          .then(cloudUrl => {
-            if (cloudUrl) {
-              replaceRoomImage(selectedRoom.id, index, cloudUrl);
-            }
-          })
-          .catch(err => console.warn('Cloud storage sync (local copy active):', err));
-      }
+      uploadImageToPublicCDN(file)
+        .then(cdnUrl => {
+          if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
+            replaceRoomImage(selectedRoom.id, index, cdnUrl);
+          }
+        })
+        .catch(err => console.warn('Public CDN sync notice (local copy active):', err));
     } catch (err) {
       console.error(err);
       showToast('❌ ' + (err.message || 'Failed to replace photo.'));
@@ -334,21 +336,19 @@ export default function AdminDashboard({ onBackToSite }) {
     const file = e.target.files?.[0];
     if (!file || !selectedSpace) return;
     try {
-      showToast('⚡ Optimizing and updating photo in real-time...');
-      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      showToast('⚡ Updating photo with high-speed CDN...');
+      const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
       replaceSpaceImage(selectedSpace.id, index, optimizedLocalUrl);
       showToast(`✅ Photo #${index + 1} updated for ${selectedSpace.name}!`);
       e.target.value = '';
 
-      if (isFirebaseConfigured()) {
-        uploadResortImageToStorage(file, 'spaces')
-          .then(cloudUrl => {
-            if (cloudUrl) {
-              replaceSpaceImage(selectedSpace.id, index, cloudUrl);
-            }
-          })
-          .catch(err => console.warn('Cloud storage sync (local copy active):', err));
-      }
+      uploadImageToPublicCDN(file)
+        .then(cdnUrl => {
+          if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
+            replaceSpaceImage(selectedSpace.id, index, cdnUrl);
+          }
+        })
+        .catch(err => console.warn('Public CDN sync notice (local copy active):', err));
     } catch (err) {
       console.error(err);
       showToast('❌ ' + (err.message || 'Failed to replace photo.'));
@@ -502,26 +502,24 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingRoom(true);
     setRoomUploadError('');
     try {
-      showToast('⚡ Optimizing photo locally in high definition...');
+      showToast('⚡ Uploading photo to high-speed CDN...');
       const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
 
-      // Real-time optimistic update: immediately display in gallery
+      // 1. Real-time optimistic update: immediately display in gallery
       addRoomImage(selectedRoom.id, optimizedLocalUrl);
-      showToast(`📸 Photo added to ${selectedRoom.name}! Live website synchronized.`);
+      showToast(`📸 Photo added to ${selectedRoom.name}! Synchronized live.`);
       e.target.value = '';
 
-      // Optional background cloud upload if Firebase Storage is operational
-      if (isFirebaseConfigured()) {
-        uploadResortImageToStorage(file, 'rooms')
-          .then(cloudUrl => {
-            if (cloudUrl) {
-              replaceRoomImage(selectedRoom.id, (selectedRoom.images?.length || 1) - 1, cloudUrl);
-            }
-          })
-          .catch(storageErr => {
-            console.warn('Background Firebase storage notice (local high-def copy active):', storageErr);
-          });
-      }
+      // 2. Upload to public CDN (ImgBB / FreeImage) for permanent public URL across devices
+      uploadImageToPublicCDN(file)
+        .then(cdnUrl => {
+          if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
+            replaceRoomImage(selectedRoom.id, (selectedRoom.images?.length || 1), cdnUrl);
+          }
+        })
+        .catch(cdnErr => {
+          console.warn('Public CDN sync notice (local high-def copy active):', cdnErr);
+        });
     } catch (err) {
       console.error('Room photo upload error:', err);
       setRoomUploadError(err.message || 'Failed to upload photo.');
@@ -546,25 +544,23 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingSpace(true);
     setSpaceUploadError('');
     try {
-      showToast(`⚡ Optimizing photo for ${selectedSpace.name}...`);
+      showToast(`⚡ Uploading photo for ${selectedSpace.name} to high-speed CDN...`);
       const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
 
       // Real-time optimistic update
       addSpaceImage(selectedSpace.id, optimizedLocalUrl);
-      showToast(`📸 Photo added to ${selectedSpace.name}! Live website synchronized.`);
+      showToast(`📸 Photo added to ${selectedSpace.name}! Synchronized live.`);
       e.target.value = '';
 
-      if (isFirebaseConfigured()) {
-        uploadResortImageToStorage(file, 'spaces')
-          .then(cloudUrl => {
-            if (cloudUrl) {
-              replaceSpaceImage(selectedSpace.id, (selectedSpace.images?.length || 1) - 1, cloudUrl);
-            }
-          })
-          .catch(storageErr => {
-            console.warn('Background space storage notice (local high-def copy active):', storageErr);
-          });
-      }
+      uploadImageToPublicCDN(file)
+        .then(cdnUrl => {
+          if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
+            replaceSpaceImage(selectedSpace.id, (selectedSpace.images?.length || 1), cdnUrl);
+          }
+        })
+        .catch(cdnErr => {
+          console.warn('Public CDN sync notice (local high-def copy active):', cdnErr);
+        });
     } catch (err) {
       console.error('Space upload error:', err);
       setSpaceUploadError(err.message || 'Failed to upload space photo.');
@@ -580,6 +576,17 @@ export default function AdminDashboard({ onBackToSite }) {
     addSpaceImage(selectedSpace.id, newSpaceImageUrl.trim());
     setNewSpaceImageUrl('');
     showToast(`✅ Photo added to ${selectedSpace.name}!`);
+  };
+
+  const handleSelectPresetPhoto = (presetUrl) => {
+    if (presetTargetType === 'space' && selectedSpace) {
+      addSpaceImage(selectedSpace.id, presetUrl);
+      showToast(`📸 Resort photo added to ${selectedSpace.name}! Synchronized across website.`);
+    } else if (selectedRoom) {
+      addRoomImage(selectedRoom.id, presetUrl);
+      showToast(`📸 Resort photo added to ${selectedRoom.name}! Synchronized across website.`);
+    }
+    setShowPresetModal(false);
   };
 
   const handleHeroFileUpload = async (e) => {
@@ -831,6 +838,11 @@ export default function AdminDashboard({ onBackToSite }) {
       filteredBookings
     };
   }, [timeframe, bookings, rooms.length]);
+
+  const filteredPresets = useMemo(() => {
+    if (presetCategory === 'All') return RESORT_PHOTO_PRESETS;
+    return RESORT_PHOTO_PRESETS.filter(p => p.category === presetCategory);
+  }, [presetCategory]);
 
   return (
     <div className="min-h-screen pms-theme flex flex-col antialiased">
@@ -2048,28 +2060,25 @@ export default function AdminDashboard({ onBackToSite }) {
                       </div>
 
                       {/* Add Photos Toolbar */}
-                      <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Device Upload */}
-                        <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors">
+                      <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Option 1: Device Upload */}
+                        <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors flex flex-col justify-center">
                           <label className="cursor-pointer block">
                             {isUploadingRoom ? (
                               <div className="py-2">
-                                <RefreshCw size={24} className="mx-auto text-amber-600 mb-2 animate-spin" />
+                                <RefreshCw size={22} className="mx-auto text-amber-600 mb-1.5 animate-spin" />
                                 <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                                  Optimizing & Uploading Photo...
-                                </span>
-                                <span className="text-[0.7rem] text-slate-500 block mt-1">
-                                  Processing high-quality client canvas encoding
+                                  Uploading to CDN...
                                 </span>
                               </div>
                             ) : (
                               <div className="py-1">
-                                <Upload size={24} className="mx-auto text-amber-600 mb-2" />
+                                <Upload size={22} className="mx-auto text-amber-600 mb-1.5" />
                                 <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                                  Upload Photo From Device
+                                  Upload Device Photo
                                 </span>
-                                <span className="text-[0.7rem] text-slate-500 block mt-1">
-                                  Select JPG, PNG, or WebP • Auto-optimized
+                                <span className="text-[0.68rem] text-slate-500 block mt-0.5">
+                                  Instant public CDN sync
                                 </span>
                                 <input
                                   type="file"
@@ -2081,26 +2090,45 @@ export default function AdminDashboard({ onBackToSite }) {
                               </div>
                             )}
                           </label>
-                          {roomUploadError && <p className="text-red-600 text-xs mt-2 font-medium">{roomUploadError}</p>}
+                          {roomUploadError && <p className="text-red-600 text-xs mt-1.5 font-medium">{roomUploadError}</p>}
                         </div>
 
-                        {/* Image URL Input */}
-                        <form onSubmit={handleAddRoomImageByUrl} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
-                          <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                            Or Add via Image URL
+                        {/* Option 2: Browse Resort Photo Presets */}
+                        <div 
+                          onClick={() => { setPresetTargetType('room'); setShowPresetModal(true); }}
+                          className="p-4 rounded-xl border border-amber-300/80 bg-amber-50/60 hover:bg-amber-100/60 text-center cursor-pointer transition-colors flex flex-col items-center justify-center group"
+                          title="Choose from authentic Peace at Peak resort photo presets"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-amber-200/70 flex items-center justify-center text-amber-800 mb-1.5 group-hover:scale-110 transition-transform">
+                            <Sparkles size={18} />
+                          </div>
+                          <span className="text-xs uppercase tracking-wider text-slate-900 font-bold block">
+                            Resort Photo Library
                           </span>
-                          <input
-                            type="url"
-                            value={newRoomImageUrl}
-                            onChange={(e) => setNewRoomImageUrl(e.target.value)}
-                            placeholder="https://... or /images/..."
-                            className="pms-input"
-                          />
+                          <span className="text-[0.68rem] text-amber-800/80 block mt-0.5">
+                            1-Click authentic resort shots
+                          </span>
+                        </div>
+
+                        {/* Option 3: Image URL Input */}
+                        <form onSubmit={handleAddRoomImageByUrl} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between space-y-2">
+                          <div>
+                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block mb-1">
+                              Add via Image Link
+                            </span>
+                            <input
+                              type="url"
+                              value={newRoomImageUrl}
+                              onChange={(e) => setNewRoomImageUrl(e.target.value)}
+                              placeholder="https://... or /images/..."
+                              className="pms-input text-xs"
+                            />
+                          </div>
                           <button
                             type="submit"
-                            className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2"
+                            className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-1.5"
                           >
-                            <Plus size={14} /> Add URL Image
+                            <Plus size={13} /> Add Link
                           </button>
                         </form>
                       </div>
@@ -2346,28 +2374,25 @@ export default function AdminDashboard({ onBackToSite }) {
                       </div>
 
                       {/* Add Photos Toolbar for Space */}
-                      <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Device File Upload */}
-                        <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors">
+                      <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Option 1: Device File Upload */}
+                        <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors flex flex-col justify-center">
                           <label className="cursor-pointer block">
                             {isUploadingSpace ? (
                               <div className="py-2">
-                                <RefreshCw size={24} className="mx-auto text-amber-600 mb-2 animate-spin" />
+                                <RefreshCw size={22} className="mx-auto text-amber-600 mb-1.5 animate-spin" />
                                 <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                                  Optimizing & Uploading Photo...
-                                </span>
-                                <span className="text-[0.7rem] text-slate-500 block mt-1">
-                                  Processing high-quality client canvas encoding
+                                  Uploading to CDN...
                                 </span>
                               </div>
                             ) : (
                               <div className="py-1">
-                                <Upload size={24} className="mx-auto text-amber-600 mb-2" />
+                                <Upload size={22} className="mx-auto text-amber-600 mb-1.5" />
                                 <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                                  Upload Photo for {selectedSpace.name}
+                                  Upload Device Photo
                                 </span>
-                                <span className="text-[0.7rem] text-slate-500 block mt-1">
-                                  Select JPG, PNG, or WebP • Auto-optimized
+                                <span className="text-[0.68rem] text-slate-500 block mt-0.5">
+                                  Instant public CDN sync
                                 </span>
                                 <input
                                   type="file"
@@ -2379,26 +2404,45 @@ export default function AdminDashboard({ onBackToSite }) {
                               </div>
                             )}
                           </label>
-                          {spaceUploadError && <p className="text-red-600 text-xs mt-2 font-medium">{spaceUploadError}</p>}
+                          {spaceUploadError && <p className="text-red-600 text-xs mt-1.5 font-medium">{spaceUploadError}</p>}
                         </div>
 
-                        {/* Add via URL */}
-                        <form onSubmit={handleAddSpaceImageByUrl} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
-                          <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                            Or Add Image URL
+                        {/* Option 2: Browse Resort Photo Presets */}
+                        <div 
+                          onClick={() => { setPresetTargetType('space'); setShowPresetModal(true); }}
+                          className="p-4 rounded-xl border border-amber-300/80 bg-amber-50/60 hover:bg-amber-100/60 text-center cursor-pointer transition-colors flex flex-col items-center justify-center group"
+                          title="Choose from authentic Peace at Peak resort photo presets"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-amber-200/70 flex items-center justify-center text-amber-800 mb-1.5 group-hover:scale-110 transition-transform">
+                            <Sparkles size={18} />
+                          </div>
+                          <span className="text-xs uppercase tracking-wider text-slate-900 font-bold block">
+                            Resort Photo Library
                           </span>
-                          <input
-                            type="url"
-                            value={newSpaceImageUrl}
-                            onChange={(e) => setNewSpaceImageUrl(e.target.value)}
-                            placeholder="https://... or /images/..."
-                            className="pms-input"
-                          />
+                          <span className="text-[0.68rem] text-amber-800/80 block mt-0.5">
+                            1-Click authentic resort shots
+                          </span>
+                        </div>
+
+                        {/* Option 3: Add via URL */}
+                        <form onSubmit={handleAddSpaceImageByUrl} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between space-y-2">
+                          <div>
+                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block mb-1">
+                              Add via Image Link
+                            </span>
+                            <input
+                              type="url"
+                              value={newSpaceImageUrl}
+                              onChange={(e) => setNewSpaceImageUrl(e.target.value)}
+                              placeholder="https://... or /images/..."
+                              className="pms-input text-xs"
+                            />
+                          </div>
                           <button
                             type="submit"
-                            className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2"
+                            className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-1.5"
                           >
-                            <Plus size={14} /> Add Photo URL
+                            <Plus size={13} /> Add Link
                           </button>
                         </form>
                       </div>
@@ -3699,6 +3743,108 @@ export default function AdminDashboard({ onBackToSite }) {
                 className="pms-lightbox-back-btn"
               >
                 <ArrowLeft size={14} /> Go Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* RESORT PHOTO LIBRARY MODAL (1-Click Authentic Photos)          */}
+      {/* ------------------------------------------------------------- */}
+      {showPresetModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-scaleUp">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/90">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold shrink-0">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900" style={{ fontFamily: 'var(--font-display)' }}>
+                    Resort Photo Library
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Add high-res authentic photos directly to <span className="font-semibold text-slate-800">{presetTargetType === 'space' ? selectedSpace?.name : selectedRoom?.name}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPresetModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+                aria-label="Close photo modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="p-3 sm:p-4 border-b border-slate-100 flex items-center gap-2 overflow-x-auto bg-white scrollbar-thin">
+              {['All', 'Cottages', 'Swiss Tents', 'Family Suites', 'Dining & Lounge', 'Outdoor & Lawns'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setPresetCategory(cat)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+                    presetCategory === cat
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Presets Grid */}
+            <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(90vh-190px)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredPresets.map((preset, idx) => (
+                <div
+                  key={idx}
+                  className="group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 hover:border-amber-400 hover:shadow-md transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                      <img
+                        src={preset.thumb || preset.url}
+                        alt={preset.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-slate-900/80 text-white text-[0.65rem] font-semibold tracking-wide">
+                        {preset.category}
+                      </span>
+                    </div>
+                    <div className="p-3">
+                      <h4 className="text-xs font-semibold text-slate-800 line-clamp-1" title={preset.name}>
+                        {preset.name}
+                      </h4>
+                    </div>
+                  </div>
+                  <div className="p-3 pt-0">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPresetPhoto(preset.url)}
+                      className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shadow-sm active:scale-98"
+                    >
+                      <Check size={14} /> Add This Photo
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span className="hidden sm:inline">1-Click instant photo application • Real-time live update</span>
+              <button
+                type="button"
+                onClick={() => setShowPresetModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold transition-colors ml-auto sm:ml-0"
+              >
+                Close
               </button>
             </div>
           </div>
