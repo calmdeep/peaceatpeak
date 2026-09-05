@@ -31,7 +31,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
   };
 
   return (
-    <section className="relative h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative min-h-screen h-[100dvh] flex items-center justify-center overflow-hidden">
       {/* Infinite Hardware-Accelerated Sliding Track (Smooth Rightward Slide) */}
       <div
         className="absolute inset-0 flex"
@@ -48,17 +48,39 @@ export default function Hero({ onBookClick, onExploreClick }) {
         {track.map((slide, idx) => (
           <div
             key={idx}
-            className="relative h-full flex-shrink-0"
+            className="hero-slide-container"
             style={{
               width: `${100 / track.length}%`,
-              backgroundImage: `url('${slide.url}')`,
-              backgroundPosition: slide.position || 'center center',
-              backgroundSize: 'cover',
-              backgroundRepeat: 'no-repeat',
-              filter: 'contrast(1.08) brightness(0.95) saturate(1.12)',
-              imageRendering: '-webkit-optimize-contrast',
             }}
-          />
+          >
+            {/* Desktop Screen Presentation (>= 768px): Cinematic Full-Bleed Cover */}
+            <div
+              className="hero-slide-desktop-cover"
+              style={{
+                backgroundImage: `url('${slide.url}')`,
+                backgroundPosition: slide.position || 'center center',
+              }}
+            />
+
+            {/* Mobile & Android Presentation (< 768px): Show 100% Full Image with Zero Zoom + Ambient Glow */}
+            <div className="hero-slide-mobile-wrapper">
+              {/* Atmospheric ambient glow backdrop matching the exact colors of the slide */}
+              <div
+                className="hero-slide-ambient-blur"
+                style={{
+                  backgroundImage: `url('${slide.url}')`,
+                }}
+              />
+              {/* Tack-sharp full-width uncropped photo */}
+              <div
+                className="hero-slide-full-image"
+                style={{
+                  backgroundImage: `url('${slide.url}')`,
+                  backgroundPosition: slide.position || 'center center',
+                }}
+              />
+            </div>
+          </div>
         ))}
       </div>
       
@@ -66,21 +88,21 @@ export default function Hero({ onBookClick, onExploreClick }) {
       <div className="gradient-overlay" style={{ zIndex: 2 }} />
 
       {/* Content */}
-      <div className="container relative text-center px-4 flex flex-col items-center pt-24" style={{ zIndex: 10 }}>
+      <div className="container relative text-center px-4 flex flex-col items-center pt-20 sm:pt-24" style={{ zIndex: 10 }}>
         {/* Subtle Luxury Badge */}
         <div 
-          className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full mb-6 glass-panel-dark text-accent-gold border border-border-gold text-[0.65rem] uppercase tracking-widest font-medium animate-fade"
-          style={{ letterSpacing: '0.25em' }}
+          className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1 rounded-full mb-4 sm:mb-6 glass-panel-dark text-accent-gold border border-border-gold text-[0.62rem] sm:text-[0.65rem] uppercase tracking-widest font-medium animate-fade"
+          style={{ letterSpacing: '0.22em' }}
         >
           <ShieldCheck size={12} className="text-accent-gold" /> Best Rate Guaranteed
         </div>
 
         {/* Display Serif Title */}
         <h1 
-          className="text-white text-5xl sm:text-6xl md:text-7xl font-light mb-4 max-w-4xl tracking-wide leading-[1.1] animate-fade"
+          className="text-white text-3xl sm:text-5xl md:text-7xl font-light mb-3 sm:mb-4 max-w-4xl tracking-wide leading-[1.15] sm:leading-[1.1] animate-fade"
           style={{ 
             fontFamily: 'var(--font-display)',
-            textShadow: '0 4px 20px rgba(5, 13, 9, 0.4)'
+            textShadow: '0 4px 20px rgba(5, 13, 9, 0.7)'
           }}
         >
           The Sanctuary at <span className="italic text-accent-gold">Peace at Peak</span>
@@ -90,17 +112,17 @@ export default function Hero({ onBookClick, onExploreClick }) {
         <div className="gold-divider" />
         
         <p 
-          className="text-text-light-secondary text-base sm:text-lg md:text-xl mb-8 max-w-2xl font-light leading-relaxed tracking-wide"
-          style={{ textShadow: '0 2px 10px rgba(5, 13, 9, 0.5)' }}
+          className="text-text-light-secondary text-sm sm:text-lg md:text-xl mb-6 sm:mb-8 max-w-2xl font-light leading-relaxed tracking-wide px-2"
+          style={{ textShadow: '0 2px 10px rgba(5, 13, 9, 0.7)' }}
         >
           Discover silence, elegance, and pristine views of the Himalayan range. Experience private wooden cottages and luxury Swiss glamping at 8,500 feet.
         </p>
 
         {/* Action CTAs */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto mb-10">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto mb-8 sm:mb-10">
           <button 
             onClick={onBookClick}
-            className="btn btn-primary px-10 py-4 text-xs uppercase tracking-widest"
+            className="btn btn-primary px-8 sm:px-10 py-3.5 sm:py-4 text-xs uppercase tracking-widest"
             style={{ borderRadius: '0px' }}
           >
             Check Availability
@@ -108,7 +130,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
           
           <button 
             onClick={onExploreClick}
-            className="btn btn-secondary px-10 py-4 text-xs uppercase tracking-widest"
+            className="btn btn-secondary px-8 sm:px-10 py-3.5 sm:py-4 text-xs uppercase tracking-widest"
             style={{ borderRadius: '0px' }}
           >
             Explore Cottages

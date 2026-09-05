@@ -137,14 +137,18 @@ export default function AdminDashboard({ onBackToSite }) {
   // Image Upload States
   const [newRoomImageUrl, setNewRoomImageUrl] = useState('');
   const [roomUploadError, setRoomUploadError] = useState('');
+  const [isUploadingRoom, setIsUploadingRoom] = useState(false);
   const [newSpaceImageUrl, setNewSpaceImageUrl] = useState('');
   const [spaceUploadError, setSpaceUploadError] = useState('');
+  const [isUploadingSpace, setIsUploadingSpace] = useState(false);
   const [notification, setNotification] = useState('');
 
   // Hero slide form state
   const [newHeroUrl, setNewHeroUrl] = useState('');
   const [newHeroCaption, setNewHeroCaption] = useState('');
   const [newHeroPosition, setNewHeroPosition] = useState('center center');
+  const [isUploadingHero, setIsUploadingHero] = useState(false);
+  const [heroUploadError, setHeroUploadError] = useState('');
 
   // Sync room draft states when selected room changes
   useEffect(() => {
@@ -298,32 +302,79 @@ export default function AdminDashboard({ onBackToSite }) {
   };
 
   // -------------------------------------------------------------
-  // Image Upload Handlers
+  // High-Performance Device Image Optimization & Upload Handlers
   // -------------------------------------------------------------
-  const handleRoomFileUpload = (e) => {
+  const optimizeImageFile = (file, maxWidth = 1920, maxHeight = 1080, quality = 0.88) => {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error('No file selected.'));
+        return;
+      }
+      if (!file.type || !file.type.startsWith('image/')) {
+        reject(new Error('Please select a valid image file (JPG, PNG, WebP).'));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read image from device.'));
+      reader.onload = (readerEvent) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Failed to process image format. Please try another image.'));
+        img.onload = () => {
+          try {
+            let { width, height } = img;
+            // Proportionally scale down if photo exceeds full-HD resolution (e.g. 48MP Android camera photos)
+            if (width > maxWidth || height > maxHeight) {
+              const ratio = Math.min(maxWidth / width, maxHeight / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(readerEvent.target?.result);
+              return;
+            }
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Export to lightweight, ultra-crisp JPEG data URL (~150KB - 250KB)
+            const optimizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(optimizedDataUrl);
+          } catch (canvasErr) {
+            console.warn('Canvas optimization fallback', canvasErr);
+            resolve(readerEvent.target?.result);
+          }
+        };
+        img.src = readerEvent.target?.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleRoomFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !selectedRoom) return;
 
-    if (!file.type.startsWith('image/')) {
-      setRoomUploadError('Please select a valid image file (JPG, PNG, WebP).');
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      setRoomUploadError('File size is too large (maximum 8MB).');
-      return;
-    }
-
+    setIsUploadingRoom(true);
     setRoomUploadError('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result;
-      if (typeof dataUrl === 'string') {
-        addRoomImage(selectedRoom.id, dataUrl);
-        showToast('✅ New room image uploaded successfully!');
-        e.target.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimizedUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      addRoomImage(selectedRoom.id, optimizedUrl);
+      showToast('✅ New room photo optimized and uploaded successfully!');
+      e.target.value = '';
+    } catch (err) {
+      console.error(err);
+      setRoomUploadError(err.message || 'Failed to upload photo.');
+      showToast('❌ ' + (err.message || 'Upload failed.'));
+    } finally {
+      setIsUploadingRoom(false);
+    }
   };
 
   const handleAddRoomImageByUrl = (e) => {
@@ -334,25 +385,24 @@ export default function AdminDashboard({ onBackToSite }) {
     showToast('✅ Image URL added to room gallery!');
   };
 
-  const handleSpaceFileUpload = (e) => {
+  const handleSpaceFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !selectedSpace) return;
 
-    if (!file.type.startsWith('image/')) {
-      setSpaceUploadError('Please select a valid image file.');
-      return;
-    }
+    setIsUploadingSpace(true);
     setSpaceUploadError('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result;
-      if (typeof dataUrl === 'string') {
-        addSpaceImage(selectedSpace.id, dataUrl);
-        showToast(`✅ New photo uploaded to ${selectedSpace.name}!`);
-        e.target.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimizedUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      addSpaceImage(selectedSpace.id, optimizedUrl);
+      showToast(`✅ New photo optimized & uploaded to ${selectedSpace.name}!`);
+      e.target.value = '';
+    } catch (err) {
+      console.error(err);
+      setSpaceUploadError(err.message || 'Failed to upload space photo.');
+      showToast('❌ ' + (err.message || 'Upload failed.'));
+    } finally {
+      setIsUploadingSpace(false);
+    }
   };
 
   const handleAddSpaceImageByUrl = (e) => {
@@ -363,24 +413,30 @@ export default function AdminDashboard({ onBackToSite }) {
     showToast(`✅ Photo added to ${selectedSpace.name}!`);
   };
 
-  const handleHeroFileUpload = (e) => {
+  const handleHeroFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result;
-      if (typeof dataUrl === 'string') {
-        addHeroSlide({
-          url: dataUrl,
-          caption: newHeroCaption.trim() || 'Peace at Peak Resort',
-          position: newHeroPosition
-        });
-        setNewHeroCaption('');
-        showToast('✅ New Hero slide uploaded and added to 2s slideshow!');
-        e.target.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
+
+    setIsUploadingHero(true);
+    setHeroUploadError('');
+    try {
+      const optimizedUrl = await optimizeImageFile(file, 1920, 1080, 0.88);
+      const cleanCaption = newHeroCaption.trim() || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Peace at Peak Resort';
+      addHeroSlide({
+        url: optimizedUrl,
+        caption: cleanCaption,
+        position: newHeroPosition || 'center center'
+      });
+      setNewHeroCaption('');
+      showToast('✅ High-quality Hero slide uploaded and added to 2s slideshow!');
+      e.target.value = '';
+    } catch (err) {
+      console.error('Hero upload error', err);
+      setHeroUploadError(err.message || 'Failed to upload photo.');
+      showToast('❌ ' + (err.message || 'Upload failed.'));
+    } finally {
+      setIsUploadingHero(false);
+    }
   };
 
   const handleAddHeroByUrl = (e) => {
@@ -389,7 +445,7 @@ export default function AdminDashboard({ onBackToSite }) {
     addHeroSlide({
       url: newHeroUrl.trim(),
       caption: newHeroCaption.trim() || 'Peace at Peak Resort',
-      position: newHeroPosition
+      position: newHeroPosition || 'center center'
     });
     setNewHeroUrl('');
     setNewHeroCaption('');
@@ -1741,19 +1797,34 @@ export default function AdminDashboard({ onBackToSite }) {
                         {/* Device Upload */}
                         <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors">
                           <label className="cursor-pointer block">
-                            <Upload size={24} className="mx-auto text-amber-600 mb-2" />
-                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                              Upload Photo From Device
-                            </span>
-                            <span className="text-[0.7rem] text-slate-500 block mt-1">
-                              Select JPG, PNG, or WebP
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleRoomFileUpload}
-                              className="hidden"
-                            />
+                            {isUploadingRoom ? (
+                              <div className="py-2">
+                                <RefreshCw size={24} className="mx-auto text-amber-600 mb-2 animate-spin" />
+                                <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                                  Optimizing & Uploading Photo...
+                                </span>
+                                <span className="text-[0.7rem] text-slate-500 block mt-1">
+                                  Processing high-quality client canvas encoding
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="py-1">
+                                <Upload size={24} className="mx-auto text-amber-600 mb-2" />
+                                <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                                  Upload Photo From Device
+                                </span>
+                                <span className="text-[0.7rem] text-slate-500 block mt-1">
+                                  Select JPG, PNG, or WebP • Auto-optimized
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleRoomFileUpload}
+                                  className="hidden"
+                                  disabled={isUploadingRoom}
+                                />
+                              </div>
+                            )}
                           </label>
                           {roomUploadError && <p className="text-red-600 text-xs mt-2 font-medium">{roomUploadError}</p>}
                         </div>
@@ -1965,19 +2036,34 @@ export default function AdminDashboard({ onBackToSite }) {
                         {/* Device File Upload */}
                         <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors">
                           <label className="cursor-pointer block">
-                            <Upload size={24} className="mx-auto text-amber-600 mb-2" />
-                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                              Upload Photo for {selectedSpace.name}
-                            </span>
-                            <span className="text-[0.7rem] text-slate-500 block mt-1">
-                              Select JPG, PNG, or WebP
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleSpaceFileUpload}
-                              className="hidden"
-                            />
+                            {isUploadingSpace ? (
+                              <div className="py-2">
+                                <RefreshCw size={24} className="mx-auto text-amber-600 mb-2 animate-spin" />
+                                <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                                  Optimizing & Uploading Photo...
+                                </span>
+                                <span className="text-[0.7rem] text-slate-500 block mt-1">
+                                  Processing high-quality client canvas encoding
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="py-1">
+                                <Upload size={24} className="mx-auto text-amber-600 mb-2" />
+                                <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                                  Upload Photo for {selectedSpace.name}
+                                </span>
+                                <span className="text-[0.7rem] text-slate-500 block mt-1">
+                                  Select JPG, PNG, or WebP • Auto-optimized
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleSpaceFileUpload}
+                                  className="hidden"
+                                  disabled={isUploadingSpace}
+                                />
+                              </div>
+                            )}
                           </label>
                           {spaceUploadError && <p className="text-red-600 text-xs mt-2 font-medium">{spaceUploadError}</p>}
                         </div>
@@ -2120,6 +2206,72 @@ export default function AdminDashboard({ onBackToSite }) {
                     </button>
                   </div>
 
+                  {/* Quick Upload Dropzone directly in View 2 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="p-4 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/40 text-center hover:border-amber-500 transition-colors">
+                      <label className="cursor-pointer block">
+                        {isUploadingHero ? (
+                          <div className="py-2">
+                            <RefreshCw size={24} className="mx-auto text-amber-600 mb-2 animate-spin" />
+                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                              Optimizing & Uploading Hero Photo...
+                            </span>
+                            <span className="text-[0.7rem] text-slate-500 block mt-1">
+                              Compressing to crystal-clear HD for desktop & mobile
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="py-1">
+                            <Upload size={24} className="mx-auto text-amber-600 mb-2" />
+                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                              Upload New Hero Photo From Device
+                            </span>
+                            <span className="text-[0.7rem] text-slate-500 block mt-1">
+                              Landscape photo recommended • Automatically optimized for Android & Desktop
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleHeroFileUpload}
+                              className="hidden"
+                              disabled={isUploadingHero}
+                            />
+                          </div>
+                        )}
+                      </label>
+                      {heroUploadError && <p className="text-red-600 text-xs mt-2 font-medium">{heroUploadError}</p>}
+                    </div>
+
+                    <form onSubmit={handleAddHeroByUrl} className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                          Or Add Hero Image via URL
+                        </span>
+                        <input
+                          type="text"
+                          value={newHeroUrl}
+                          onChange={(e) => setNewHeroUrl(e.target.value)}
+                          placeholder="https://... or /images/..."
+                          className="pms-input text-xs"
+                          required
+                        />
+                        <input
+                          type="text"
+                          value={newHeroCaption}
+                          onChange={(e) => setNewHeroCaption(e.target.value)}
+                          placeholder="Slide caption (e.g. Sunset Panorama)"
+                          className="pms-input text-xs"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full pms-btn pms-btn-primary py-2 text-xs uppercase tracking-wider"
+                      >
+                        <Plus size={14} /> Add to Hero Carousel
+                      </button>
+                    </form>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {heroSlides.map((slide, idx) => (
                       <div key={idx} className="pms-card overflow-hidden border border-slate-200 flex flex-col justify-between shadow-sm">
@@ -2249,20 +2401,36 @@ export default function AdminDashboard({ onBackToSite }) {
 
                     <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center hover:border-amber-500 transition-colors">
                       <label className="cursor-pointer block">
-                        <Upload size={24} className="mx-auto text-amber-600 mb-2" />
-                        <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
-                          Upload Photo From Device
-                        </span>
-                        <span className="text-[0.7rem] text-slate-500 block mt-1">
-                          Landscape 16:9 recommended
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleHeroFileUpload}
-                          className="hidden"
-                        />
+                        {isUploadingHero ? (
+                          <div className="py-2">
+                            <RefreshCw size={24} className="mx-auto text-amber-600 mb-2 animate-spin" />
+                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                              Optimizing & Uploading Hero Photo...
+                            </span>
+                            <span className="text-[0.7rem] text-slate-500 block mt-1">
+                              Processing HD canvas encoding for desktop & mobile
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="py-1">
+                            <Upload size={24} className="mx-auto text-amber-600 mb-2" />
+                            <span className="text-xs uppercase tracking-wider text-slate-800 font-bold block">
+                              Upload Photo From Device
+                            </span>
+                            <span className="text-[0.7rem] text-slate-500 block mt-1">
+                              High-res phone & camera photos auto-optimized
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleHeroFileUpload}
+                              className="hidden"
+                              disabled={isUploadingHero}
+                            />
+                          </div>
+                        )}
                       </label>
+                      {heroUploadError && <p className="text-red-600 text-xs mt-2 font-medium">{heroUploadError}</p>}
                     </div>
 
                     <div className="text-center text-xs text-slate-400 uppercase tracking-widest font-semibold">

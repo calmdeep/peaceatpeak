@@ -284,7 +284,14 @@ export function AppProvider({ children }) {
     try {
       localStorage.setItem('pap_hero_slides', JSON.stringify(heroSlides));
     } catch (e) {
-      console.error('Error saving hero slides to storage', e);
+      console.warn('Direct storage write warning for hero slides, attempting recovery', e);
+      try {
+        // Keep the latest 8 slides if quota exceeded
+        const safeSlides = heroSlides.slice(-8);
+        localStorage.setItem('pap_hero_slides', JSON.stringify(safeSlides));
+      } catch (innerErr) {
+        console.warn('Storage quota limit reached in browser', innerErr);
+      }
     }
   }, [heroSlides]);
 

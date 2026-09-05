@@ -2464,3 +2464,79 @@ input, select, textarea, input::placeholder {
 .w-2 { width: 0.5rem !important; }
 .h-48 { height: 12rem !important; }
 .sm\:h-48 { height: 12rem !important; }
+
+/* ==========================================================================
+   Hero Slideshow Engine (Desktop Cover & Mobile Full-Image High-Quality System)
+   ========================================================================== */
+.hero-slide-container {
+  position: relative !important;
+  height: 100% !important;
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+  background-color: #050d09 !important;
+}
+
+/* Desktop Screens (>= 768px): Cinematic Full-Bleed Cover */
+@media (min-width: 768px) {
+  .hero-slide-desktop-cover {
+    position: absolute !important;
+    inset: 0 !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
+    filter: contrast(1.08) brightness(0.95) saturate(1.12) !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: high-quality !important;
+  }
+
+  .hero-slide-mobile-wrapper {
+    display: none !important;
+  }
+}
+
+/* Mobile & Android Screens (< 768px): Show 100% Full Image with Zero Zoom + Ambient Glow */
+@media (max-width: 767px) {
+  .hero-slide-desktop-cover {
+    display: none !important;
+  }
+
+  .hero-slide-mobile-wrapper {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  /* Ambient atmospheric glow fills vertical screen seamlessly with matching colors */
+  .hero-slide-ambient-blur {
+    position: absolute !important;
+    top: -24px !important;
+    bottom: -24px !important;
+    left: -24px !important;
+    right: -24px !important;
+    background-size: cover !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+    filter: blur(32px) brightness(0.4) saturate(1.3) !important;
+    transform: scale(1.15) !important;
+    opacity: 0.95 !important;
+    z-index: 1 !important;
+  }
+
+  /* Full uncropped, unzoomed, tack-sharp hero photo */
+  .hero-slide-full-image {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center center !important;
+    filter: contrast(1.08) brightness(0.98) saturate(1.15) !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: high-quality !important;
+    z-index: 2 !important;
+  }
+}
