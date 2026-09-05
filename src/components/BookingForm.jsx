@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Mail, Phone, User, CheckCircle2, ChevronRight, Calculator, ShieldCheck, XCircle } from 'lucide-react';
+import { 
+  Calendar, 
+  Users, 
+  Mail, 
+  Phone, 
+  User, 
+  CheckCircle2, 
+  ChevronRight, 
+  Calculator, 
+  ShieldCheck, 
+  XCircle,
+  CreditCard,
+  Sparkles,
+  Lock
+} from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { initiateRazorpayPayment } from '../services/razorpayService';
 
 export default function BookingForm({ preselectedRoomId }) {
   const { rooms, addBooking, getEffectivePrice, getRoomInventory } = useAppContext();
@@ -19,6 +34,11 @@ export default function BookingForm({ preselectedRoomId }) {
     phone: '',
   });
 
+  // Payment Options: 'full' (100% online) | 'advance' (50% online) | 'arrival' (pay at resort)
+  const [paymentOption, setPaymentOption] = useState('full');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentResult, setPaymentResult] = useState(null);
+
   const selectedRoom = rooms.find(r => r.id === formData.roomId) || rooms[0] || {};
   const currentInv = getRoomInventory
     ? getRoomInventory(formData.roomId, formData.checkIn, formData.checkOut)
@@ -35,6 +55,11 @@ export default function BookingForm({ preselectedRoomId }) {
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bookingId, setBookingId] = useState('');
+
+  const payableNow = paymentOption === 'full' 
+    ? bookingSummary.total 
+    : (paymentOption === 'advance' ? Math.round(bookingSummary.total / 2) : 0);
+  const balanceDue = bookingSummary.total - payableNow;
 
   useEffect(() => {
     if (preselectedRoomId) {
@@ -76,7 +101,7 @@ export default function BookingForm({ preselectedRoomId }) {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.phone) {
       alert('Please complete all contact credentials fields.');
@@ -87,8 +112,9 @@ export default function BookingForm({ preselectedRoomId }) {
     const id = `PAP-${new Date().getFullYear()}-${randomNum}`;
     setBookingId(id);
 
-    if (addBooking) {
-      addBooking({
+    // Option 1: Pay on arrival
+    if (paymentOption === 'arrival') {
+      const bookingRecord = {
         id,
         guestName: formData.name,
         email: formData.email,
@@ -98,11 +124,72 @@ export default function BookingForm({ preselectedRoomId }) {
         checkIn: formData.checkIn,
         checkOut: formData.checkOut,
         nights: bookingSummary.nights,
-        amount: bookingSummary.total
+        amount: bookingSummary.total,
+        status: 'active',
+        paymentStatus: 'pay_at_checkin',
+        paymentMethod: 'Pay at Resort / UPI on Arrival',
+        paidAmount: 0,
+        balanceAmount: bookingSummary.total
+      };
+      if (addBooking) addBooking(bookingRecord);
+      setPaymentResult({
+        paymentId: null,
+        method: 'Pay on Arrival (UPI / Cash at Resort)',
+        paidAmount: 0,
+        balanceAmount: bookingSummary.total
       });
+      setIsSubmitted(true);
+      return;
     }
 
-    setIsSubmitted(true);
+    // Option 2 & 3: Razorpay Payment (Full or 50% Advance)
+    setIsProcessingPayment(true);
+    try {
+      await initiateRazorpayPayment({
+        amount: payableNow,
+        bookingId: id,
+        roomName: selectedRoom.name,
+        guestName: formData.name,
+        guestEmail: formData.email,
+        guestPhone: formData.phone,
+        onSuccess: (paymentData) => {
+          setIsProcessingPayment(false);
+          const bookingRecord = {
+            id,
+            guestName: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            roomId: formData.roomId,
+            roomName: selectedRoom.name,
+            checkIn: formData.checkIn,
+            checkOut: formData.checkOut,
+            nights: bookingSummary.nights,
+            amount: bookingSummary.total,
+            status: 'confirmed',
+            paymentStatus: paymentOption === 'full' ? 'paid' : 'advance_paid',
+            paymentMethod: 'Razorpay Online (UPI / Card / NetBanking)',
+            paymentId: paymentData.paymentId,
+            paidAmount: payableNow,
+            balanceAmount: balanceDue
+          };
+          if (addBooking) addBooking(bookingRecord);
+          setPaymentResult({
+            paymentId: paymentData.paymentId,
+            method: 'Razorpay Online (UPI / Card / NetBanking)',
+            paidAmount: payableNow,
+            balanceAmount: balanceDue
+          });
+          setIsSubmitted(true);
+        },
+        onDismiss: () => {
+          setIsProcessingPayment(false);
+        }
+      });
+    } catch (err) {
+      console.error('Razorpay launch error', err);
+      setIsProcessingPayment(false);
+      alert('Could not launch Razorpay: ' + (err.message || 'Please check your connection and try again.'));
+    }
   };
 
   if (isSubmitted) {
@@ -122,6 +209,32 @@ export default function BookingForm({ preselectedRoomId }) {
               <div className="flex justify-between items-center bg-bg-light p-4 rounded border border-border-light">
                 <span className="text-[0.65rem] uppercase tracking-widest text-text-dark-secondary font-bold">Booking ID</span>
                 <span className="font-mono text-sm font-semibold text-primary-deep">{bookingId}</span>
+              </div>
+
+              {/* Payment Verification Badge */}
+              <div className="bg-emerald-50/80 p-4 rounded-lg border border-emerald-200 space-y-2 text-xs">
+                <div className="flex justify-between items-center text-emerald-950 font-bold">
+                  <span className="flex items-center gap-1.5"><ShieldCheck size={16} className="text-emerald-600" /> Payment Status</span>
+                  <span className="uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[0.68rem] font-bold">
+                    {paymentResult?.paymentId ? 'Verified via Razorpay' : 'Confirmed (Pay on Arrival)'}
+                  </span>
+                </div>
+                {paymentResult?.paymentId && (
+                  <div className="flex justify-between text-[0.7rem] text-emerald-800 font-mono">
+                    <span>Razorpay ID:</span>
+                    <span>{paymentResult.paymentId}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs text-emerald-900 pt-1.5 border-t border-emerald-200/60">
+                  <span>Paid Online:</span>
+                  <span className="font-bold text-sm">₹{paymentResult?.paidAmount?.toLocaleString() || 0}</span>
+                </div>
+                {paymentResult?.balanceAmount > 0 && (
+                  <div className="flex justify-between text-xs text-amber-900 font-semibold">
+                    <span>Balance Due on Arrival:</span>
+                    <span className="font-bold text-amber-800">₹{paymentResult.balanceAmount.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
 
               {/* Grid Specifications */}
@@ -164,7 +277,7 @@ export default function BookingForm({ preselectedRoomId }) {
                   <span>₹{bookingSummary.basePrice}</span>
                 </div>
                 <div className="flex justify-between text-text-dark-secondary">
-                  <span>Simulated Tax (12% GST)</span>
+                  <span>GST (12%)</span>
                   <span>₹{bookingSummary.tax}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold text-primary-deep pt-3 border-t border-dashed border-border-light">
@@ -174,8 +287,8 @@ export default function BookingForm({ preselectedRoomId }) {
               </div>
 
               <div className="text-center text-[0.65rem] text-text-dark-secondary space-y-1 pt-2">
-                <p>⚠️ Demo voucher. No real charges are debited.</p>
-                <p>Check-in details and route directions have been sent to your inbox.</p>
+                <p>Check-in instructions and route directions have been sent to your email.</p>
+                <p>We look forward to welcoming you at Peace at Peak, Kanatal!</p>
               </div>
 
               <button
@@ -364,6 +477,105 @@ export default function BookingForm({ preselectedRoomId }) {
               </div>
             </div>
 
+            {/* Payment Options (Razorpay UPI / Cards vs Pay on Arrival) */}
+            <div className="space-y-3 pt-2">
+              <label className="text-[0.65rem] uppercase tracking-widest text-text-dark-primary font-bold flex items-center justify-between">
+                <span>Select Payment Mode</span>
+                <span className="text-accent-gold text-[0.62rem] font-semibold flex items-center gap-1">
+                  <Lock size={11} /> 256-Bit SSL Encrypted
+                </span>
+              </label>
+
+              <div className="space-y-2.5">
+                {/* Full Online Payment via Razorpay */}
+                <label 
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    paymentOption === 'full' 
+                      ? 'border-amber-500 bg-amber-50/50 shadow-xs' 
+                      : 'border-border-light hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="paymentOption"
+                    value="full"
+                    checked={paymentOption === 'full'}
+                    onChange={() => setPaymentOption('full')}
+                    className="mt-1"
+                  />
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs text-primary-deep flex items-center gap-1.5">
+                        <CreditCard size={14} className="text-amber-600" /> Pay 100% Online (Razorpay)
+                      </span>
+                      <span className="text-xs font-bold text-primary-deep font-mono">₹{bookingSummary.total.toLocaleString()}</span>
+                    </div>
+                    <p className="text-[0.68rem] text-text-dark-secondary mt-0.5">
+                      Instant guaranteed confirmation via UPI (Google Pay, PhonePe, Paytm), Cards, or NetBanking.
+                    </p>
+                  </div>
+                </label>
+
+                {/* 50% Advance Token Deposit */}
+                <label 
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    paymentOption === 'advance' 
+                      ? 'border-amber-500 bg-amber-50/50 shadow-xs' 
+                      : 'border-border-light hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="paymentOption"
+                    value="advance"
+                    checked={paymentOption === 'advance'}
+                    onChange={() => setPaymentOption('advance')}
+                    className="mt-1"
+                  />
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs text-primary-deep flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-amber-600" /> 50% Advance Deposit (Razorpay)
+                      </span>
+                      <span className="text-xs font-bold text-amber-700 font-mono">Pay ₹{Math.round(bookingSummary.total / 2).toLocaleString()}</span>
+                    </div>
+                    <p className="text-[0.68rem] text-text-dark-secondary mt-0.5">
+                      Pay ₹{Math.round(bookingSummary.total / 2).toLocaleString()} now to block your cottage; balance ₹{(bookingSummary.total - Math.round(bookingSummary.total / 2)).toLocaleString()} payable at check-in.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Pay on Arrival / Offline UPI at Resort */}
+                <label 
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    paymentOption === 'arrival' 
+                      ? 'border-amber-500 bg-amber-50/50 shadow-xs' 
+                      : 'border-border-light hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="paymentOption"
+                    value="arrival"
+                    checked={paymentOption === 'arrival'}
+                    onChange={() => setPaymentOption('arrival')}
+                    className="mt-1"
+                  />
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs text-primary-deep">
+                        Pay on Arrival (UPI / Cash at Front Desk)
+                      </span>
+                      <span className="text-[0.68rem] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">Pay Later</span>
+                    </div>
+                    <p className="text-[0.68rem] text-text-dark-secondary mt-0.5">
+                      Confirm your reservation now and pay total tariff directly upon arrival in Kanatal.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {!isRoomAvailable && (
               <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
                 <XCircle size={16} className="shrink-0 text-red-500" />
@@ -373,18 +585,26 @@ export default function BookingForm({ preselectedRoomId }) {
 
             <button
               type="submit"
-              disabled={!isRoomAvailable}
+              disabled={!isRoomAvailable || isProcessingPayment}
               className={`btn btn-block py-4 text-xs font-semibold uppercase tracking-widest ${
-                isRoomAvailable
+                isRoomAvailable && !isProcessingPayment
                   ? 'btn-primary'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-200'
               }`}
               style={{ borderRadius: '0px' }}
             >
-              {isRoomAvailable ? (
-                <>
-                  Request Reservation <ChevronRight size={16} />
-                </>
+              {isProcessingPayment ? (
+                'Opening Razorpay Secure Window...'
+              ) : isRoomAvailable ? (
+                paymentOption === 'arrival' ? (
+                  <>
+                    Confirm Reservation (Pay on Arrival) <ChevronRight size={16} />
+                  </>
+                ) : (
+                  <>
+                    Pay ₹{payableNow.toLocaleString()} via Razorpay <ChevronRight size={16} />
+                  </>
+                )
               ) : (
                 'Selected Sanctuary Is Sold Out'
               )}
@@ -417,7 +637,7 @@ export default function BookingForm({ preselectedRoomId }) {
               <div className="space-y-3 text-xs">
                 <div className="flex justify-between text-text-light-secondary">
                   <span>Room rate (Per Night)</span>
-                  <span>₹{selectedRoom.price}</span>
+                  <span>₹{selectedRoom.price?.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-text-light-secondary">
                   <span>Duration</span>
@@ -425,23 +645,36 @@ export default function BookingForm({ preselectedRoomId }) {
                 </div>
                 <div className="flex justify-between text-text-light-secondary">
                   <span>Subtotal</span>
-                  <span>₹{bookingSummary.basePrice}</span>
+                  <span>₹{bookingSummary.basePrice?.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-text-light-secondary">
                   <span>Hotel GST (12%)</span>
-                  <span>₹{bookingSummary.tax}</span>
+                  <span>₹{bookingSummary.tax?.toLocaleString()}</span>
                 </div>
                 <div className="w-full h-[1px] bg-white/10 my-2" />
                 <div className="flex justify-between text-sm font-bold text-white pt-1">
                   <span className="uppercase tracking-widest">GRAND TOTAL</span>
-                  <span className="text-accent-gold text-base">₹{bookingSummary.total}</span>
+                  <span className="text-accent-gold text-base">₹{bookingSummary.total?.toLocaleString()}</span>
                 </div>
+
+                {paymentOption === 'advance' && (
+                  <div className="bg-white/10 p-3 rounded-lg text-xs space-y-1 mt-3 border border-white/15">
+                    <div className="flex justify-between text-amber-300 font-bold">
+                      <span>Payable Now (50% Deposit):</span>
+                      <span>₹{payableNow.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300 text-[0.7rem]">
+                      <span>Balance on Check-In:</span>
+                      <span>₹{balanceDue.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-bg-dark/50 p-4 rounded-xl border border-border-gold/25 flex items-start gap-2.5 text-[0.65rem] text-text-light-secondary leading-relaxed">
                 <ShieldCheck className="text-accent-gold shrink-0 mt-0.5" size={14} />
                 <p>
-                  Prices are locked upon reservation submit. Free cancellations are honored up to 24 hours prior to check-in dates.
+                  Instant confirmation. Protected by Razorpay 256-Bit SSL Bank Grade Security. Free cancellations honored up to 24 hours prior to check-in.
                 </p>
               </div>
             </div>
