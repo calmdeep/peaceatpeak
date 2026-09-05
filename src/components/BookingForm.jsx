@@ -30,6 +30,7 @@ import {
   getWhatsAppShareUrl,
   shareReservationVoucher,
   triggerWhatsAppWebhook,
+  dispatchAutomatedWhatsAppReceipt,
   RESORT_WHATSAPP_PRIMARY 
 } from '../services/whatsappService';
 import {
@@ -84,16 +85,19 @@ export default function BookingForm({ preselectedRoomId }) {
   const [receiptDataUrl, setReceiptDataUrl] = useState(null);
   const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [autoSendStatus, setAutoSendStatus] = useState('idle'); // 'sending' | 'sent' | 'unconfigured' | 'failed'
 
   const payableNow = paymentOption === 'full' 
     ? bookingSummary.total 
     : (paymentOption === 'advance' ? Math.round(bookingSummary.total / 2) : 0);
   const balanceDue = bookingSummary.total - payableNow;
 
-  // Automatically generate high-res receipt image and upload to CDN upon confirmation
+  // Automatically generate high-res receipt image and dispatch to customer WhatsApp upon confirmation
   useEffect(() => {
     if (isSubmitted && bookingId && !autoSentWhatsApp) {
       setAutoSentWhatsApp(true);
+      setAutoSendStatus('sending');
+
       const currentBooking = {
         id: bookingId,
         guestName: formData.name,
@@ -125,20 +129,41 @@ export default function BookingForm({ preselectedRoomId }) {
           generateAndUploadReceiptImage(currentBooking)
             .then(uploadedUrl => {
               setIsGeneratingReceipt(false);
-              if (uploadedUrl) {
-                setReceiptImageUrl(uploadedUrl);
-                triggerWhatsAppWebhook({ ...currentBooking, receiptImageUrl: uploadedUrl });
+              const finalImageUrl = uploadedUrl && uploadedUrl.startsWith('http') ? uploadedUrl : null;
+              if (finalImageUrl) {
+                setReceiptImageUrl(finalImageUrl);
               }
+
+              // 3. Automatically dispatch via backend Serverless API to customer's WhatsApp
+              dispatchAutomatedWhatsAppReceipt(currentBooking, finalImageUrl)
+                .then(apiRes => {
+                  if (apiRes?.success) {
+                    setAutoSendStatus('sent');
+                  } else if (apiRes?.requiresConfiguration) {
+                    setAutoSendStatus('unconfigured');
+                  } else {
+                    setAutoSendStatus('unconfigured');
+                  }
+                })
+                .catch(() => setAutoSendStatus('unconfigured'));
+
+              // Also trigger webhook if configured
+              triggerWhatsAppWebhook({ ...currentBooking, receiptImageUrl: finalImageUrl });
             })
-            .catch(() => setIsGeneratingReceipt(false));
+            .catch(() => {
+              setIsGeneratingReceipt(false);
+              dispatchAutomatedWhatsAppReceipt(currentBooking, null)
+                .then(apiRes => setAutoSendStatus(apiRes?.success ? 'sent' : 'unconfigured'))
+                .catch(() => setAutoSendStatus('unconfigured'));
+            });
         })
         .catch(err => {
           console.warn('Receipt generation notice:', err);
           setIsGeneratingReceipt(false);
+          dispatchAutomatedWhatsAppReceipt(currentBooking, null)
+            .then(apiRes => setAutoSendStatus(apiRes?.success ? 'sent' : 'unconfigured'))
+            .catch(() => setAutoSendStatus('unconfigured'));
         });
-
-      // Dispatch webhook
-      triggerWhatsAppWebhook(currentBooking);
     }
   }, [isSubmitted, bookingId, formData, paymentResult, paymentOption, bookingSummary, selectedRoom, autoSentWhatsApp]);
 
@@ -322,6 +347,48 @@ export default function BookingForm({ preselectedRoomId }) {
               <div className="flex justify-between items-center bg-bg-light p-4 rounded border border-border-light">
                 <span className="text-[0.65rem] uppercase tracking-widest text-text-dark-secondary font-bold">Booking ID</span>
                 <span className="font-mono text-sm font-semibold text-primary-deep">{bookingId}</span>
+              </div>
+
+              {/* Automated WhatsApp Delivery Notification Banner */}
+              <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-3 transition-all ${
+                autoSendStatus === 'sent' 
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950 shadow-xs' 
+                  : (autoSendStatus === 'sending' 
+                      ? 'bg-sky-50 border-sky-300 text-sky-950 shadow-xs'
+                      : (autoSendStatus === 'unconfigured' 
+                          ? 'bg-amber-50/80 border-amber-200 text-amber-950' 
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'))
+              }`}>
+                <div className="shrink-0 mt-0.5">
+                  {autoSendStatus === 'sending' && <Loader2 size={16} className="animate-spin text-sky-600" />}
+                  {autoSendStatus === 'sent' && <CheckCircle2 size={16} className="text-emerald-600" />}
+                  {autoSendStatus === 'unconfigured' && <Sparkles size={16} className="text-amber-600" />}
+                  {autoSendStatus === 'idle' && <Send size={16} className="text-emerald-600" />}
+                </div>
+                <div className="flex-1 text-left space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold uppercase tracking-wider text-[0.7rem]">
+                      {autoSendStatus === 'sent' && '✓ Receipt Automatically Delivered to WhatsApp'}
+                      {autoSendStatus === 'sending' && '⚡ Automatically Sending Receipt to WhatsApp...'}
+                      {autoSendStatus === 'unconfigured' && 'Automated WhatsApp Dispatch Ready'}
+                      {autoSendStatus === 'idle' && 'WhatsApp Reservation Dispatch'}
+                    </p>
+                    <span className="text-[0.62rem] font-mono px-2 py-0.5 rounded bg-white/80 font-bold">
+                      {formData.phone}
+                    </span>
+                  </div>
+                  <p className="text-[0.68rem] opacity-90 leading-relaxed">
+                    {autoSendStatus === 'sent' && (
+                      `Your official booking receipt image and voucher have been sent automatically to ${formData.phone}. Check your WhatsApp!`
+                    )}
+                    {autoSendStatus === 'sending' && (
+                      `Sending official digital receipt image to ${formData.phone} via resort gateway...`
+                    )}
+                    {autoSendStatus === 'unconfigured' && (
+                      `Background dispatch API is active. To enable silent 24/7 background sending without opening WhatsApp, connect your resort WhatsApp gateway (UltraMsg / Meta Cloud API) in Vercel environment variables.`
+                    )}
+                  </p>
+                </div>
               </div>
 
               {/* Payment Verification Badge */}

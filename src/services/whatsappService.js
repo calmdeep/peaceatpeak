@@ -214,6 +214,40 @@ export async function triggerWhatsAppWebhook(booking) {
 }
 
 /**
+ * Calls the backend serverless API (/api/send-whatsapp) to automatically
+ * dispatch the reservation confirmation and receipt image to the customer's WhatsApp.
+ */
+export async function dispatchAutomatedWhatsAppReceipt(booking, receiptImageUrl = null) {
+  try {
+    const message = formatReservationWhatsAppMessage(booking, receiptImageUrl);
+    const res = await fetch('/api/send-whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: booking.phone,
+        message,
+        receiptImageUrl,
+        booking: {
+          id: booking.id,
+          guestName: booking.guestName,
+          roomName: booking.roomName,
+          amount: booking.amount,
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut
+        }
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn('dispatchAutomatedWhatsAppReceipt notice:', err);
+  }
+  return { success: false };
+}
+
+/**
  * Triggers opening WhatsApp in a new tab or window
  */
 export function sendReservationToWhatsApp(phone, booking) {
