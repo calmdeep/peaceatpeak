@@ -8,12 +8,13 @@ import { getAuth } from 'firebase/auth';
  * Keys are loaded securely from Vite environment variables (import.meta.env)
  */
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBGZrfipxfd8hckQRruTzgyg3Ct0Tj7RmU",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "peace-at-peak.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "peace-at-peak",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "peace-at-peak.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "519458890753",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:519458890753:web:e0ed0a259ac5037f604c00",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-DTKBXVR709"
 };
 
 /**
