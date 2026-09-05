@@ -33,7 +33,13 @@ export default function Footer({ setActiveTab }) {
             </p>
 
             <div className="flex items-center gap-3 pt-2">
-              <a href="#" className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-light-secondary hover:text-accent-gold transition-all border border-white/10">
+              <a 
+                href="https://www.facebook.com/peaceatpeak/" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                aria-label="Peace at Peak Facebook"
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-light-secondary hover:text-accent-gold transition-all border border-white/10"
+              >
                 <Facebook size={14} />
               </a>
               <a 
