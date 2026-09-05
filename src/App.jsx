@@ -13,7 +13,22 @@ import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 import { Compass, MapPin } from 'lucide-react';
 
+function handleSocialRedirects() {
+  const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
+  const hash = window.location.hash.toLowerCase().replace(/\/$/, '');
+  if (path === '/facebook' || path === '/fb' || hash === '#facebook' || hash === '#fb') {
+    window.location.href = 'https://www.facebook.com/peaceatpeak/';
+    return true;
+  }
+  if (path === '/instagram' || path === '/insta' || hash === '#instagram' || hash === '#insta') {
+    window.location.href = 'https://www.instagram.com/peaceatpeak_kanatal?igsi=emtwMWdlZHg5NGJs';
+    return true;
+  }
+  return false;
+}
+
 function checkIsAdminRoute() {
+  if (handleSocialRedirects()) return false;
   const path = window.location.pathname.toLowerCase();
   const hash = window.location.hash.toLowerCase();
   return path === '/admin' || path === '/admin/' || hash === '#admin' || hash === '#/admin';
@@ -48,6 +63,7 @@ function MainApp() {
   // Listen to browser navigation (/admin vs /dining vs /rooms etc)
   useEffect(() => {
     const handleLocationChange = () => {
+      if (handleSocialRedirects()) return;
       const isAdmin = checkIsAdminRoute();
       setIsAdminRoute(isAdmin);
       if (!isAdmin) {
