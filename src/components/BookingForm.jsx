@@ -477,7 +477,7 @@ export default function BookingForm({ preselectedRoomId }) {
                     name="phone"
                     value={formData.phone}
                     onChange={handleInputChange}
-                    placeholder="e.g. +91 99887 76655"
+                    placeholder="e.g. +91 70555 22239"
                     className="w-full px-4 py-3 rounded-md border border-border-light focus:border-accent-gold bg-bg-light transition-all text-xs font-medium"
                     required
                   />

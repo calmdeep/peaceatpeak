@@ -85,10 +85,22 @@ export default function Footer({ setActiveTab }) {
                 <span>Chopariyal Gaon, Churer Dhar, Kanatal, Tehri Garhwal, Uttarakhand, India - 249145</span>
               </p>
 
-              <p className="flex items-center gap-2.5">
-                <Phone size={14} className="text-accent-gold shrink-0" />
-                <span>+91 99887 76655</span>
-              </p>
+              <div className="flex items-start gap-2.5">
+                <Phone size={14} className="text-accent-gold shrink-0 mt-0.5" />
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                  <a href="tel:+917055522239" className="hover:text-accent-gold transition-colors font-medium">
+                    +91 70555 22239
+                  </a>
+                  <span className="text-white/30">,</span>
+                  <a href="tel:+919568251581" className="hover:text-accent-gold transition-colors font-medium">
+                    +91 95682 51581
+                  </a>
+                  <span className="text-white/30">,</span>
+                  <a href="tel:+919368970669" className="hover:text-accent-gold transition-colors font-medium">
+                    +91 93689 70669
+                  </a>
+                </div>
+              </div>
 
               <p className="flex items-center gap-2.5">
                 <Mail size={14} className="text-accent-gold shrink-0" />
