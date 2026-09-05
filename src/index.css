@@ -2498,6 +2498,81 @@ input, select, textarea, input::placeholder {
 .h-48 { height: 12rem !important; }
 .sm\:h-48 { height: 12rem !important; }
 
+/* Sizing and Object-Fit Utilities for Full Size Image Previews (No Zoom) */
+.object-contain {
+  object-fit: contain !important;
+}
+
+.object-cover {
+  object-fit: cover !important;
+}
+
+.w-12 { width: 3rem !important; }
+.h-12 { height: 3rem !important; }
+.w-14 { width: 3.5rem !important; }
+.h-14 { height: 3.5rem !important; }
+.w-16 { width: 4rem !important; }
+.h-16 { height: 4rem !important; }
+.w-20 { width: 5rem !important; }
+.h-20 { height: 5rem !important; }
+.w-24 { width: 6rem !important; }
+.h-24 { height: 6rem !important; }
+.w-28 { width: 7rem !important; }
+.h-28 { height: 7rem !important; }
+.w-32 { width: 8rem !important; }
+.h-32 { height: 8rem !important; }
+.w-36 { width: 9rem !important; }
+.h-36 { height: 9rem !important; }
+.w-40 { width: 10rem !important; }
+.h-40 { height: 10rem !important; }
+
+/* Full-Size Unzoomed Image Preview Containers */
+.pms-img-preview-stage {
+  width: 100% !important;
+  aspect-ratio: 16 / 10 !important;
+  background-color: #030805 !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+.pms-img-preview-stage img {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  image-rendering: high-quality !important;
+  transition: transform 0.25s ease !important;
+}
+
+.pms-img-preview-stage:hover img {
+  transform: scale(1.02) !important;
+}
+
+.pms-lightbox-stage {
+  max-width: 100% !important;
+  max-height: 80vh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.pms-lightbox-stage img {
+  max-width: 100% !important;
+  max-height: 78vh !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  image-rendering: high-quality !important;
+}
+
 /* ==========================================================================
    Hero Slideshow Engine (Desktop Cover & Mobile Full-Image High-Quality System)
 /* ==========================================================================

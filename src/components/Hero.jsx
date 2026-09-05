@@ -34,7 +34,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
 
   return (
     <section className="relative min-h-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[#050d09]">
-      
+
       {/* =========================================================================
           1. DESKTOP VIEW (>= 768px): Cinematic Full-Bleed Cover with Centered Overlay
          ========================================================================= */}
@@ -75,7 +75,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
       {/* Desktop Centered Content Overlay */}
       <div className="container relative text-center px-4 hero-desktop-content flex-col items-center pt-20 sm:pt-24" style={{ zIndex: 10 }}>
         {/* Subtle Luxury Badge */}
-        <div 
+        <div
           className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full mb-6 glass-panel-dark text-accent-gold border border-border-gold text-[0.65rem] uppercase tracking-widest font-medium animate-fade"
           style={{ letterSpacing: '0.22em' }}
         >
@@ -83,20 +83,20 @@ export default function Hero({ onBookClick, onExploreClick }) {
         </div>
 
         {/* Display Serif Title */}
-        <h1 
+        <h1
           className="text-white text-5xl md:text-7xl font-light mb-4 max-w-4xl tracking-wide leading-[1.1] animate-fade"
-          style={{ 
+          style={{
             fontFamily: 'var(--font-display)',
             textShadow: '0 4px 20px rgba(5, 13, 9, 0.7)'
           }}
         >
           The Sanctuary at <span className="italic text-accent-gold">Peace at Peak</span>
         </h1>
-        
+
         {/* Thin Gold Separator */}
         <div className="gold-divider" />
-        
-        <p 
+
+        <p
           className="text-text-light-secondary text-lg md:text-xl mb-8 max-w-2xl font-light leading-relaxed tracking-wide px-2"
           style={{ textShadow: '0 2px 10px rgba(5, 13, 9, 0.7)' }}
         >
@@ -105,17 +105,17 @@ export default function Hero({ onBookClick, onExploreClick }) {
 
         {/* Action CTAs */}
         <div className="flex flex-row gap-4 w-auto mb-10">
-          <button 
+          <button
             onClick={onBookClick}
             className="btn btn-primary px-10 py-4 text-xs uppercase tracking-widest"
             style={{ borderRadius: '0px' }}
           >
             Check Availability
           </button>
-          
-          <button 
+
+          <button
             onClick={onExploreClick}
-            className="btn btn-secondary px-10 py-4 text-xs uppercase tracking-widest"
+            className="btn btn-secondary px-10 py-5 text-xs uppercase tracking-widest"
             style={{ borderRadius: '0px' }}
           >
             Explore Cottages
@@ -129,19 +129,19 @@ export default function Hero({ onBookClick, onExploreClick }) {
               <label className="text-[0.6rem] uppercase tracking-widest font-bold text-accent-gold flex items-center gap-1.5">
                 <Calendar size={12} /> Check-In
               </label>
-              <input 
+              <input
                 type="date"
                 defaultValue={today}
                 min={today}
                 className="w-full bg-transparent text-white border-0 border-b border-white/20 pb-1 pt-1 text-xs focus:border-accent-gold focus:ring-0 text-left font-medium"
               />
             </div>
-            
+
             <div className="text-left space-y-1">
               <label className="text-[0.6rem] uppercase tracking-widest font-bold text-accent-gold flex items-center gap-1.5">
                 <Calendar size={12} /> Check-Out
               </label>
-              <input 
+              <input
                 type="date"
                 defaultValue={today}
                 min={today}
@@ -153,7 +153,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
               <label className="text-[0.6rem] uppercase tracking-widest font-bold text-accent-gold flex items-center gap-1.5">
                 🏔️ Sanctuary
               </label>
-              <select 
+              <select
                 className="w-full bg-transparent text-white border-0 border-b border-white/20 pb-1 pt-1 text-xs focus:border-accent-gold focus:ring-0 text-left font-medium select-none"
                 style={{ appearance: 'none', background: 'transparent' }}
               >
@@ -166,7 +166,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
             </div>
 
             <div className="flex items-end">
-              <button 
+              <button
                 onClick={onBookClick}
                 className="btn btn-primary btn-block py-2.5 text-[0.65rem] tracking-widest uppercase"
                 style={{ borderRadius: '0px' }}
@@ -198,13 +198,13 @@ export default function Hero({ onBookClick, onExploreClick }) {
              - ZONE C: High-visibility Gold Primary & Frosted Secondary buttons
          ========================================================================= */}
       <div className="hero-mobile-wrapper">
-        
+
         {/* -------------------------------------------------------------
             ZONE A: TEXT ABOVE THE IMAGE (High Visibility & Perfect Spacing)
            ------------------------------------------------------------- */}
         <div className="flex flex-col items-center text-center space-y-1.5 w-full max-w-[380px] mx-auto">
           {/* Subtle Luxury Badge */}
-          <div 
+          <div
             className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[0.62rem] uppercase font-semibold"
             style={{
               color: '#f3d375',
@@ -218,7 +218,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
           </div>
 
           {/* Main Title */}
-          <h1 
+          <h1
             className="text-white text-2xl sm:text-3xl font-light tracking-wide leading-tight mt-1"
             style={{ fontFamily: 'var(--font-display)', textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
           >
@@ -226,7 +226,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
           </h1>
 
           {/* Gold Divider */}
-          <div 
+          <div
             className="my-1"
             style={{
               width: '40px',
@@ -236,10 +236,10 @@ export default function Hero({ onBookClick, onExploreClick }) {
           />
 
           {/* Description (Crisp Off-White Slate-200 with High Contrast) */}
-          <p 
+          <p
             className="font-light leading-relaxed max-w-[340px] mx-auto px-1"
-            style={{ 
-              color: '#f1f5f9', 
+            style={{
+              color: '#f1f5f9',
               fontSize: '0.8rem',
               textShadow: '0 1px 4px rgba(0,0,0,0.95)'
             }}
@@ -271,7 +271,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
                 <div
                   key={idx}
                   className="relative h-full overflow-hidden"
-                  style={{ 
+                  style={{
                     flex: `0 0 ${100 / track.length}%`,
                     width: `${100 / track.length}%`,
                     maxWidth: `${100 / track.length}%`
@@ -312,7 +312,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
             ZONE C: ACTION BUTTONS BELOW THE IMAGE (High Visibility & Perfect Spacing)
            ------------------------------------------------------------- */}
         <div className="hero-mobile-actions">
-          <button 
+          <button
             type="button"
             onClick={onBookClick}
             className="hero-mobile-btn-primary"
@@ -320,8 +320,8 @@ export default function Hero({ onBookClick, onExploreClick }) {
           >
             <Calendar size={15} /> CHECK AVAILABILITY
           </button>
-          
-          <button 
+
+          <button
             type="button"
             onClick={onExploreClick}
             className="hero-mobile-btn-secondary"

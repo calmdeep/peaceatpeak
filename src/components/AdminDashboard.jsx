@@ -325,6 +325,7 @@ export default function AdminDashboard({ onBackToSite }) {
   const [showHeroPreview, setShowHeroPreview] = useState(false);
   const [previewDevice, setPreviewDevice] = useState('mobile'); // 'mobile' | 'desktop'
   const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
+  const [fullScreenPreview, setFullScreenPreview] = useState(null); // { url, title, subtitle }
 
   useEffect(() => {
     if (!showHeroPreview || heroSlides.length <= 1) return;
@@ -1181,17 +1182,31 @@ export default function AdminDashboard({ onBackToSite }) {
                         className="pms-card p-4 space-y-3 relative overflow-hidden flex flex-col justify-between"
                       >
                         <div>
-                          <div className="flex items-center gap-3">
+                          {/* Full-Size Unzoomed Image Preview Stage (No Zoom, 100% Complete Aspect) */}
+                          <div 
+                            onClick={() => setFullScreenPreview({
+                              url: room.image || room.images?.[0],
+                              title: room.name,
+                              subtitle: `₹${effPrice.toLocaleString()} / night • ${liveInfo.totalUnits} Units Total`
+                            })}
+                            className="pms-img-preview-stage mb-3"
+                            title="Click to view 100% full-size uncropped image"
+                          >
                             <img
                               src={room.image || room.images?.[0]}
                               alt={room.name}
-                              className="w-16 h-16 rounded-lg object-cover border border-slate-200 shrink-0"
                             />
+                            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/75 text-[0.62rem] text-white backdrop-blur-sm pointer-events-none font-medium flex items-center gap-1">
+                              <Eye size={10} className="text-amber-400" /> Full Preview
+                            </span>
+                          </div>
+
+                          {/* Room Name, Pricing & Badges */}
+                          <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-grow">
                               <h3 className="text-xs uppercase font-bold tracking-wider text-slate-900 truncate">
                                 {room.name}
                               </h3>
-                              
                               <div className="flex items-baseline gap-1.5 mt-0.5">
                                 <span className="text-amber-700 font-bold text-sm">
                                   ₹{effPrice.toLocaleString()}
@@ -1203,19 +1218,19 @@ export default function AdminDashboard({ onBackToSite }) {
                                 )}
                                 <span className="text-[0.65rem] text-slate-500">/ night</span>
                               </div>
+                            </div>
 
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                {room.tag && (
-                                  <span className={`room-feature-tag tag-${room.tagColor || 'gold'}`} style={{ fontSize: '0.62rem', padding: '0.2rem 0.5rem' }}>
-                                    ★ {room.tag}
-                                  </span>
-                                )}
-                                {room.offer && (
-                                  <span className="room-offer-badge" style={{ fontSize: '0.62rem', padding: '0.2rem 0.5rem' }}>
-                                    ⚡ {room.offer}
-                                  </span>
-                                )}
-                              </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              {room.tag && (
+                                <span className={`room-feature-tag tag-${room.tagColor || 'gold'}`} style={{ fontSize: '0.62rem', padding: '0.2rem 0.5rem' }}>
+                                  ★ {room.tag}
+                                </span>
+                              )}
+                              {room.offer && (
+                                <span className="room-offer-badge" style={{ fontSize: '0.62rem', padding: '0.15rem 0.45rem' }}>
+                                  ⚡ {room.offer}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1790,18 +1805,29 @@ export default function AdminDashboard({ onBackToSite }) {
                               key={idx}
                               className="pms-card overflow-hidden border border-slate-200 flex flex-col justify-between shadow-sm"
                             >
-                              <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
+                              <div 
+                                onClick={() => setFullScreenPreview({
+                                  url: imgUrl,
+                                  title: `${selectedRoom.name} — Photo ${idx + 1}`,
+                                  subtitle: isPrimary ? 'Primary Cover Photo' : 'Room Gallery Image'
+                                })}
+                                className="pms-img-preview-stage"
+                                title="Click to view full-size image without zoom"
+                              >
                                 <img
                                   src={imgUrl}
                                   alt={`${selectedRoom.name} ${idx + 1}`}
-                                  className="w-full h-full object-cover"
                                 />
 
                                 {isPrimary && (
-                                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[0.65rem] uppercase tracking-wider font-bold shadow flex items-center gap-1">
+                                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[0.65rem] uppercase tracking-wider font-bold shadow flex items-center gap-1 z-10">
                                     <Star size={10} fill="currentColor" /> Cover Photo
                                   </span>
                                 )}
+
+                                <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/75 text-[0.62rem] text-white backdrop-blur-sm pointer-events-none font-medium flex items-center gap-1">
+                                  <Eye size={10} className="text-amber-400" /> Full Preview
+                                </span>
                               </div>
 
                               {/* Visible Action Toolbar for each image */}
@@ -2030,18 +2056,29 @@ export default function AdminDashboard({ onBackToSite }) {
                               key={idx}
                               className="pms-card overflow-hidden border border-slate-200 flex flex-col justify-between shadow-sm"
                             >
-                              <div className="relative aspect-[16/10] bg-slate-100 overflow-hidden">
+                              <div 
+                                onClick={() => setFullScreenPreview({
+                                  url: imgUrl,
+                                  title: `${selectedSpace.name} — Photo ${idx + 1}`,
+                                  subtitle: isPrimary ? 'Main Display Photo' : 'Space Showcase Image'
+                                })}
+                                className="pms-img-preview-stage"
+                                title="Click to view full-size image without zoom"
+                              >
                                 <img
                                   src={imgUrl}
                                   alt={`${selectedSpace.name} ${idx + 1}`}
-                                  className="w-full h-full object-cover"
                                 />
 
                                 {isPrimary && (
-                                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[0.65rem] uppercase tracking-wider font-bold shadow flex items-center gap-1">
+                                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[0.65rem] uppercase tracking-wider font-bold shadow flex items-center gap-1 z-10">
                                     <Star size={10} fill="currentColor" /> Main Display
                                   </span>
                                 )}
+
+                                <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/75 text-[0.62rem] text-white backdrop-blur-sm pointer-events-none font-medium flex items-center gap-1">
+                                  <Eye size={10} className="text-amber-400" /> Full Preview
+                                </span>
                               </div>
 
                               {/* Visible Toolbar with Remove Button */}
@@ -2405,8 +2442,23 @@ export default function AdminDashboard({ onBackToSite }) {
                         {idx + 1}
                       </span>
 
-                      <div className="w-full sm:w-32 h-20 rounded-lg overflow-hidden border border-slate-200 shrink-0 bg-slate-100">
-                        <img src={slide.url} alt={`Hero Slide ${idx + 1}`} className="w-full h-full object-cover" />
+                      <div 
+                        onClick={() => setFullScreenPreview({
+                          url: slide.url,
+                          title: `Hero Slide ${idx + 1}`,
+                          subtitle: slide.caption || 'Hero Background Slide'
+                        })}
+                        className="w-full sm:w-36 h-24 rounded-lg overflow-hidden border border-slate-200 shrink-0 bg-slate-950 flex items-center justify-center cursor-pointer group relative shadow-inner"
+                        title="Click to view 100% full-size uncropped image"
+                      >
+                        <img 
+                          src={slide.url} 
+                          alt={`Hero Slide ${idx + 1}`} 
+                          className="max-w-full max-h-full object-contain" 
+                        />
+                        <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[0.6rem] text-white backdrop-blur-sm pointer-events-none font-medium flex items-center gap-1">
+                          <Eye size={10} className="text-amber-400" /> Full
+                        </span>
                       </div>
 
                       <div className="flex-grow min-w-0 space-y-2 w-full">
@@ -3232,6 +3284,72 @@ export default function AdminDashboard({ onBackToSite }) {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* =======================================================================
+          GLOBAL FULL-SIZE IMAGE PREVIEW LIGHTBOX (100% UNZOOMED / UNCROPPED)
+         ======================================================================= */}
+      {fullScreenPreview && (
+        <div 
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-between bg-black/95 backdrop-blur-md p-3 sm:p-6 animate-fade"
+          onClick={() => setFullScreenPreview(null)}
+        >
+          {/* Header Bar */}
+          <div 
+            className="w-full max-w-5xl flex items-center justify-between pb-3 text-white select-none z-10 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                {fullScreenPreview.title}
+              </h3>
+              {fullScreenPreview.subtitle && (
+                <p className="text-xs text-slate-400">{fullScreenPreview.subtitle}</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline-block px-3 py-1 rounded-full text-[0.68rem] uppercase font-bold tracking-wider bg-slate-800 text-amber-300 border border-slate-700">
+                Full Original Size • No Zoom
+              </span>
+              <button
+                type="button"
+                onClick={() => setFullScreenPreview(null)}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+                title="Close full-size preview"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Main Full Size Unzoomed Image Stage */}
+          <div 
+            className="w-full max-w-5xl flex-grow pms-lightbox-stage overflow-hidden relative rounded-2xl border border-white/10 bg-slate-950/90 p-2 sm:p-4 shadow-2xl my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={fullScreenPreview.url}
+              alt={fullScreenPreview.title}
+            />
+          </div>
+
+          {/* Footer Bar */}
+          <div 
+            className="w-full max-w-5xl flex items-center justify-between pt-3 text-slate-400 text-xs select-none shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="truncate max-w-xs sm:max-w-md">Source: {fullScreenPreview.url}</span>
+            <button
+              type="button"
+              onClick={() => setFullScreenPreview(null)}
+              className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-xs"
+            >
+              Close Full View
+            </button>
           </div>
         </div>
       )}

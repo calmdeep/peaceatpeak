@@ -39,9 +39,9 @@ export const DEFAULT_ROOMS = [
     name: 'Swiss Tents',
     totalUnits: 5, // 5 luxury swiss glamping tents
     unitLabel: 'Swiss Tents',
-    image: '/images/swiss1.avif',
+    image: '/images/room_tent.jpg',
     images: [
-      '/images/swiss1.avif',
+      '/images/room_tent.jpg',
       '/images/room_tent_2.jpg',
       '/images/room_tent_3.jpg'
     ],
@@ -187,6 +187,8 @@ export function AppProvider({ children }) {
               : (Number(r.totalUnits) || (r.id === 'family_tent' ? 4 : 5)),
             unitLabel: r.unitLabel || (r.id === 'private_cottage' ? 'Wooden Cottages' : r.id === 'swiss_tent' ? 'Swiss Tents' : 'Family Suites'),
             tagColor: r.tagColor || (r.id === 'private_cottage' ? 'gold' : r.id === 'swiss_tent' ? 'emerald' : 'blue'),
+            image: (r.image && !r.image.includes('swiss1.avif')) ? r.image : (r.id === 'swiss_tent' ? '/images/room_tent.jpg' : r.image),
+            images: (r.images || []).map(img => img.includes('swiss1.avif') ? '/images/room_tent.jpg' : img),
             currentGuest: r.currentGuest && r.currentGuest.name?.includes('Malhotra') ? null : r.currentGuest,
             available: r.available !== false
           }));
