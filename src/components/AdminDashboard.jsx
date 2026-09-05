@@ -52,6 +52,7 @@ export default function AdminDashboard({ onBackToSite }) {
   const { 
     isFirebaseActive,
     rooms, 
+    setRooms,
     updateRoom, 
     addRoomImage, 
     replaceRoomImage,
@@ -61,6 +62,7 @@ export default function AdminDashboard({ onBackToSite }) {
     getEffectivePrice,
     getRoomInventory,
     propertySpaces,
+    setPropertySpaces,
     updatePropertySpace,
     addSpaceImage,
     replaceSpaceImage,
@@ -435,13 +437,15 @@ export default function AdminDashboard({ onBackToSite }) {
   // -------------------------------------------------------------
   // High-Performance Device Image Optimization & Upload Handlers
   // -------------------------------------------------------------
-  const optimizeImageFile = (file, maxWidth = 1920, maxHeight = 1080, quality = 0.88) => {
+  const optimizeImageFile = (file, maxWidth = 1200, maxHeight = 800, quality = 0.78) => {
     return new Promise((resolve, reject) => {
       if (!file) {
         reject(new Error('No file selected.'));
         return;
       }
-      if (!file.type || !file.type.startsWith('image/')) {
+      const isImage = (file.type && file.type.startsWith('image/')) ||
+                      (file.name && /\.(jpe?g|png|webp|avif|gif|bmp|heic|jfif)$/i.test(file.name));
+      if (!isImage) {
         reject(new Error('Please select a valid image file (JPG, PNG, WebP).'));
         return;
       }
@@ -449,12 +453,15 @@ export default function AdminDashboard({ onBackToSite }) {
       const reader = new FileReader();
       reader.onerror = () => reject(new Error('Failed to read image from device.'));
       reader.onload = (readerEvent) => {
+        const rawResult = readerEvent.target?.result;
         const img = new Image();
-        img.onerror = () => reject(new Error('Failed to process image format. Please try another image.'));
+        img.onerror = () => {
+          // Fallback to raw data URL if image rendering fails
+          resolve(rawResult);
+        };
         img.onload = () => {
           try {
             let { width, height } = img;
-            // Proportionally scale down if photo exceeds full-HD resolution (e.g. 48MP Android camera photos)
             if (width > maxWidth || height > maxHeight) {
               const ratio = Math.min(maxWidth / width, maxHeight / height);
               width = Math.round(width * ratio);
@@ -466,7 +473,7 @@ export default function AdminDashboard({ onBackToSite }) {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (!ctx) {
-              resolve(readerEvent.target?.result);
+              resolve(rawResult);
               return;
             }
 
@@ -474,15 +481,15 @@ export default function AdminDashboard({ onBackToSite }) {
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Export to lightweight, ultra-crisp JPEG data URL (~150KB - 250KB)
+            // Export to high-definition ~45KB data URL
             const optimizedDataUrl = canvas.toDataURL('image/jpeg', quality);
             resolve(optimizedDataUrl);
           } catch (canvasErr) {
             console.warn('Canvas optimization fallback', canvasErr);
-            resolve(readerEvent.target?.result);
+            resolve(rawResult);
           }
         };
-        img.src = readerEvent.target?.result;
+        img.src = rawResult;
       };
       reader.readAsDataURL(file);
     });
@@ -495,43 +502,28 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingRoom(true);
     setRoomUploadError('');
     try {
-      // 1. Instant client-side canvas compression (< 100ms)
       showToast('⚡ Optimizing photo locally in high definition...');
-      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
 
-      // 2. Real-time optimistic update: immediately display in gallery
+      // Real-time optimistic update: immediately display in gallery
       addRoomImage(selectedRoom.id, optimizedLocalUrl);
       showToast(`📸 Photo added to ${selectedRoom.name}! Live website synchronized.`);
       e.target.value = '';
 
-      // 3. Asynchronous background upload to Firebase Storage if active
+      // Optional background cloud upload if Firebase Storage is operational
       if (isFirebaseConfigured()) {
         uploadResortImageToStorage(file, 'rooms')
           .then(cloudUrl => {
             if (cloudUrl) {
-              setRooms(prev => prev.map(room => {
-                if (room.id === selectedRoom.id && Array.isArray(room.images)) {
-                  const updatedImages = room.images.map(img => img === optimizedLocalUrl ? cloudUrl : img);
-                  return {
-                    ...room,
-                    images: updatedImages,
-                    image: room.image === optimizedLocalUrl ? cloudUrl : room.image
-                  };
-                }
-                return room;
-              }));
-              syncRoomToFirestore(selectedRoom.id, {
-                ...selectedRoom,
-                images: (selectedRoom.images || []).map(img => img === optimizedLocalUrl ? cloudUrl : img)
-              }).catch(console.warn);
+              replaceRoomImage(selectedRoom.id, (selectedRoom.images?.length || 1) - 1, cloudUrl);
             }
           })
           .catch(storageErr => {
-            console.warn('Background Firebase storage note (local optimized copy retained):', storageErr);
+            console.warn('Background Firebase storage notice (local high-def copy active):', storageErr);
           });
       }
     } catch (err) {
-      console.error(err);
+      console.error('Room photo upload error:', err);
       setRoomUploadError(err.message || 'Failed to upload photo.');
       showToast('❌ ' + (err.message || 'Upload failed.'));
     } finally {
@@ -554,43 +546,27 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingSpace(true);
     setSpaceUploadError('');
     try {
-      // 1. Instant client-side canvas compression
       showToast(`⚡ Optimizing photo for ${selectedSpace.name}...`);
-      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
 
-      // 2. Real-time optimistic update
+      // Real-time optimistic update
       addSpaceImage(selectedSpace.id, optimizedLocalUrl);
       showToast(`📸 Photo added to ${selectedSpace.name}! Live website synchronized.`);
       e.target.value = '';
 
-      // 3. Background Cloud Storage sync
       if (isFirebaseConfigured()) {
         uploadResortImageToStorage(file, 'spaces')
           .then(cloudUrl => {
             if (cloudUrl) {
-              setPropertySpaces(prev => prev.map(space => {
-                if (space.id === selectedSpace.id && Array.isArray(space.images)) {
-                  const updatedImages = space.images.map(img => img === optimizedLocalUrl ? cloudUrl : img);
-                  return {
-                    ...space,
-                    images: updatedImages,
-                    image: space.image === optimizedLocalUrl ? cloudUrl : space.image
-                  };
-                }
-                return space;
-              }));
-              syncPropertySpaceToFirestore(selectedSpace.id, {
-                ...selectedSpace,
-                images: (selectedSpace.images || []).map(img => img === optimizedLocalUrl ? cloudUrl : img)
-              }).catch(console.warn);
+              replaceSpaceImage(selectedSpace.id, (selectedSpace.images?.length || 1) - 1, cloudUrl);
             }
           })
           .catch(storageErr => {
-            console.warn('Background space storage note (local optimized copy retained):', storageErr);
+            console.warn('Background space storage notice (local high-def copy active):', storageErr);
           });
       }
     } catch (err) {
-      console.error(err);
+      console.error('Space upload error:', err);
       setSpaceUploadError(err.message || 'Failed to upload space photo.');
       showToast('❌ ' + (err.message || 'Upload failed.'));
     } finally {

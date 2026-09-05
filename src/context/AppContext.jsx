@@ -390,17 +390,25 @@ export function AppProvider({ children }) {
     // Seed rooms to Firestore if newly created database
     seedInitialRoomsIfEmpty(rooms);
 
-    // 1. Rooms Live Subscription - Syncs changes without resurrecting deleted photos
+    // 1. Rooms Live Subscription - Syncs changes without resurrecting deleted photos or overwriting newer local edits
     const unsubRooms = subscribeToRooms((cloudRooms) => {
       if (Array.isArray(cloudRooms) && cloudRooms.length > 0) {
         setRooms(prev => {
           return prev.map(currentRoom => {
             const match = cloudRooms.find(cr => cr.id === currentRoom.id);
             if (!match) return currentRoom;
+
+            const cloudTime = new Date(match.updatedAt || 0).getTime();
+            const localTime = new Date(currentRoom.updatedAt || 0).getTime();
+            // If local state has a newer active edit or pending write, don't revert to stale cloud snapshot!
+            if (localTime > cloudTime) {
+              return currentRoom;
+            }
+
             return {
               ...currentRoom,
               ...match,
-              images: Array.isArray(match.images) ? match.images : currentRoom.images,
+              images: Array.isArray(match.images) && match.images.length > 0 ? match.images : currentRoom.images,
               image: match.image || (Array.isArray(match.images) && match.images[0]) || currentRoom.image
             };
           });
@@ -415,10 +423,25 @@ export function AppProvider({ children }) {
       }
     });
 
-    // 3. Property Spaces Live Subscription
+    // 3. Property Spaces Live Subscription - Safe timestamped merge
     const unsubSpaces = subscribeToPropertySpaces((cloudSpaces) => {
       if (Array.isArray(cloudSpaces) && cloudSpaces.length > 0) {
-        setPropertySpaces(cloudSpaces);
+        setPropertySpaces(prev => {
+          return prev.map(currentSpace => {
+            const match = cloudSpaces.find(cs => cs.id === currentSpace.id);
+            if (!match) return currentSpace;
+
+            const cloudTime = new Date(match.updatedAt || 0).getTime();
+            const localTime = new Date(currentSpace.updatedAt || 0).getTime();
+            if (localTime > cloudTime) return currentSpace;
+
+            return {
+              ...currentSpace,
+              ...match,
+              images: Array.isArray(match.images) && match.images.length > 0 ? match.images : currentSpace.images
+            };
+          });
+        });
       }
     });
 
@@ -484,8 +507,9 @@ export function AppProvider({ children }) {
 
   // Rooms Management
   const updateRoom = (roomId, updates) => {
+    const now = new Date().toISOString();
     setRooms(prev => {
-      const next = prev.map(room => (room.id === roomId ? { ...room, ...updates } : room));
+      const next = prev.map(room => (room.id === roomId ? { ...room, ...updates, updatedAt: now } : room));
       const target = next.find(r => r.id === roomId);
       if (target) {
         setTimeout(() => syncRoomToFirestore(roomId, target), 0);
@@ -496,6 +520,7 @@ export function AppProvider({ children }) {
 
   const addRoomImage = (roomId, imageUrl) => {
     if (!imageUrl) return;
+    const now = new Date().toISOString();
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId) {
@@ -503,7 +528,8 @@ export function AppProvider({ children }) {
           return {
             ...room,
             images: updatedImages,
-            image: room.image || imageUrl
+            image: room.image || imageUrl,
+            updatedAt: now
           };
         }
         return room;
@@ -518,6 +544,7 @@ export function AppProvider({ children }) {
 
   const replaceRoomImage = (roomId, imageIndex, newImageUrl) => {
     if (!newImageUrl) return;
+    const now = new Date().toISOString();
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && Array.isArray(room.images)) {
@@ -528,7 +555,8 @@ export function AppProvider({ children }) {
           return {
             ...room,
             images: updatedImages,
-            image: wasCover ? newImageUrl : (room.image || newImageUrl)
+            image: wasCover ? newImageUrl : (room.image || newImageUrl),
+            updatedAt: now
           };
         }
         return room;
@@ -542,6 +570,7 @@ export function AppProvider({ children }) {
   };
 
   const reorderRoomImages = (roomId, fromIndex, toIndex) => {
+    const now = new Date().toISOString();
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && Array.isArray(room.images)) {
@@ -554,7 +583,8 @@ export function AppProvider({ children }) {
           return {
             ...room,
             images: updatedImages,
-            image: updatedImages[0] || room.image || ''
+            image: updatedImages[0] || room.image || '',
+            updatedAt: now
           };
         }
         return room;
@@ -568,6 +598,7 @@ export function AppProvider({ children }) {
   };
 
   const removeRoomImage = (roomId, imageIndex) => {
+    const now = new Date().toISOString();
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && Array.isArray(room.images)) {
@@ -580,7 +611,8 @@ export function AppProvider({ children }) {
           return {
             ...room,
             images: newImages,
-            image: newCover
+            image: newCover,
+            updatedAt: now
           };
         }
         return room;
@@ -594,6 +626,7 @@ export function AppProvider({ children }) {
   };
 
   const setRoomPrimaryImage = (roomId, imageIndex) => {
+    const now = new Date().toISOString();
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && room.images && room.images[imageIndex]) {
@@ -602,7 +635,8 @@ export function AppProvider({ children }) {
           return {
             ...room,
             image: selectedImg,
-            images: reordered
+            images: reordered,
+            updatedAt: now
           };
         }
         return room;
@@ -617,8 +651,9 @@ export function AppProvider({ children }) {
 
   // Property Spaces Management (Dining Hall & Reception Lounge)
   const updatePropertySpace = (spaceId, updates) => {
+    const now = new Date().toISOString();
     setPropertySpaces(prev => {
-      const next = prev.map(space => (space.id === spaceId ? { ...space, ...updates } : space));
+      const next = prev.map(space => (space.id === spaceId ? { ...space, ...updates, updatedAt: now } : space));
       const target = next.find(s => s.id === spaceId);
       if (target) {
         setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
@@ -629,6 +664,7 @@ export function AppProvider({ children }) {
 
   const addSpaceImage = (spaceId, imageUrl) => {
     if (!imageUrl) return;
+    const now = new Date().toISOString();
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId) {
@@ -636,7 +672,8 @@ export function AppProvider({ children }) {
           return {
             ...space,
             images: updatedImages,
-            image: space.image || imageUrl
+            image: space.image || imageUrl,
+            updatedAt: now
           };
         }
         return space;
@@ -651,6 +688,7 @@ export function AppProvider({ children }) {
 
   const replaceSpaceImage = (spaceId, imageIndex, newImageUrl) => {
     if (!newImageUrl) return;
+    const now = new Date().toISOString();
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && Array.isArray(space.images)) {
@@ -660,7 +698,8 @@ export function AppProvider({ children }) {
           return {
             ...space,
             images: updatedImages,
-            image: wasCover ? newImageUrl : (space.image || newImageUrl)
+            image: wasCover ? newImageUrl : (space.image || newImageUrl),
+            updatedAt: now
           };
         }
         return space;
@@ -674,6 +713,7 @@ export function AppProvider({ children }) {
   };
 
   const reorderSpaceImages = (spaceId, fromIndex, toIndex) => {
+    const now = new Date().toISOString();
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && Array.isArray(space.images)) {
@@ -686,7 +726,8 @@ export function AppProvider({ children }) {
           return {
             ...space,
             images: updatedImages,
-            image: updatedImages[0] || space.image || ''
+            image: updatedImages[0] || space.image || '',
+            updatedAt: now
           };
         }
         return space;
