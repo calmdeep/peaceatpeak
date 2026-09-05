@@ -121,6 +121,7 @@ export const DEFAULT_PROPERTY_SPACES = [
     image: '/images/dining_hall_buffet.jpg',
     images: [
       '/images/dining_hall_buffet.jpg',
+      '/images/dining_hall_interior.jpg',
       '/images/dining_reception_exterior.jpg'
     ]
   },
@@ -155,33 +156,13 @@ export const DEFAULT_HERO_SLIDES = [
   { url: '/images/hero_slide_5.jpg', position: 'center center', caption: 'Crimson Dusk Skies Framed Through Pine Trees' }
 ];
 
-// Clean real bookings initialization - no fake seeds
 function getInitialBookings() {
   try {
     const saved = localStorage.getItem('pap_bookings_data');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        // Filter out any older mock/fake seeds
-        return parsed.filter(b => 
-          b && b.guestName &&
-          !b.guestName.includes('Malhotra') && 
-          !b.guestName.includes('Arjun Sen') &&
-          !b.guestName.includes('Pooja Hegde') &&
-          !b.guestName.includes('Devansh Kulkarni') &&
-          !b.guestName.includes('Kapur') &&
-          !b.guestName.includes('Siddharth Iyer') &&
-          !b.guestName.includes('Deshmukh') &&
-          !b.guestName.includes('Singhania') &&
-          !b.guestName.includes('Aditya & Shalini') &&
-          !b.guestName.includes('Oberoi') &&
-          !b.guestName.includes('Sameer & Shalini') &&
-          !b.guestName.includes('Alok Gupta') &&
-          !b.guestName.includes('Deepak & Sunita') &&
-          !b.guestName.includes('Ambani') &&
-          !b.guestName.includes('Preeti Chandra') &&
-          !b.guestName.includes('Goenka')
-        );
+        return parsed.filter(b => b && b.guestName);
       }
     }
   } catch (e) {
@@ -193,7 +174,6 @@ function getInitialBookings() {
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
-  // Rooms state with localStorage persistence
   const [rooms, setRooms] = useState(() => {
     try {
       const saved = localStorage.getItem('pap_rooms_data');
@@ -208,7 +188,7 @@ export function AppProvider({ children }) {
             unitLabel: r.unitLabel || (r.id === 'private_cottage' ? 'Wooden Cottages' : r.id === 'swiss_tent' ? 'Swiss Tents' : 'Family Suites'),
             tagColor: r.tagColor || (r.id === 'private_cottage' ? 'gold' : r.id === 'swiss_tent' ? 'emerald' : 'blue'),
             currentGuest: r.currentGuest && r.currentGuest.name?.includes('Malhotra') ? null : r.currentGuest,
-            status: r.status === 'reserved' && (!r.currentGuest || r.currentGuest.name?.includes('Malhotra')) ? 'available' : r.status
+            available: r.available !== false
           }));
         }
       }
@@ -218,19 +198,19 @@ export function AppProvider({ children }) {
     return DEFAULT_ROOMS;
   });
 
-  // Property spaces (Dining Hall & Reception Lounge) with persistence
   const [propertySpaces, setPropertySpaces] = useState(() => {
     try {
+      const aiCleaned = localStorage.getItem('pap_ai_cleanup_v3');
+      if (!aiCleaned) {
+        localStorage.setItem('pap_ai_cleanup_v3', 'true');
+        localStorage.removeItem('pap_hero_slides');
+        localStorage.removeItem('pap_property_spaces');
+        return DEFAULT_PROPERTY_SPACES;
+      }
       const saved = localStorage.getItem('pap_property_spaces');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map(sp => ({
-            ...sp,
-            image: sp.image && sp.image.includes('dining_hall_main') ? '/images/dining_hall_buffet.jpg' : sp.image,
-            images: (sp.images || []).filter(img => !img.includes('dining_hall_main'))
-          }));
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {
       console.warn('Failed to load property spaces from localStorage', e);
@@ -238,7 +218,6 @@ export function AppProvider({ children }) {
     return DEFAULT_PROPERTY_SPACES;
   });
 
-  // Hero slides state with localStorage persistence
   const [heroSlides, setHeroSlides] = useState(() => {
     try {
       const saved = localStorage.getItem('pap_hero_slides');
@@ -252,10 +231,8 @@ export function AppProvider({ children }) {
     return DEFAULT_HERO_SLIDES;
   });
 
-  // Bookings state with localStorage persistence (Clean real data only)
   const [bookings, setBookings] = useState(getInitialBookings);
 
-  // Admin Auth state with localStorage and sessionStorage persistence
   const [adminAuth, setAdminAuth] = useState(() => {
     try {
       const token = localStorage.getItem('pap_admin_auth') || sessionStorage.getItem('pap_admin_auth');

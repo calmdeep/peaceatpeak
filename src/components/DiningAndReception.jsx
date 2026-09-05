@@ -19,6 +19,11 @@ export default function DiningAndReception() {
       category: 'dining'
     },
     {
+      src: '/images/dining_hall_interior.jpg',
+      title: 'Dining Pavilion Interior & Banquet',
+      category: 'dining'
+    },
+    {
       src: '/images/reception_lounge_sunset.jpg',
       title: 'Sunset Lounge & Reception Area',
       category: 'lounge'
