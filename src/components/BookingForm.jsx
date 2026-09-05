@@ -15,15 +15,29 @@ import {
   Lock,
   Send,
   Copy,
-  Check
+  Check,
+  Download,
+  Eye,
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { initiateRazorpayPayment, isPlaceholderRazorpayKey } from '../services/razorpayService';
 import { 
   formatReservationWhatsAppMessage, 
-  getWhatsAppUrl, 
+  getResortWhatsAppUrl,
+  getGuestWhatsAppUrl,
+  getWhatsAppShareUrl,
+  shareReservationVoucher,
+  triggerWhatsAppWebhook,
   RESORT_WHATSAPP_PRIMARY 
 } from '../services/whatsappService';
+import {
+  getReceiptImageBlob,
+  generateAndUploadReceiptImage,
+  downloadReceiptImage,
+  shareReceiptImageFile
+} from '../services/receiptImageService';
 
 export default function BookingForm({ preselectedRoomId }) {
   const { rooms, addBooking, getEffectivePrice, getRoomInventory } = useAppContext();
@@ -66,47 +80,67 @@ export default function BookingForm({ preselectedRoomId }) {
   const [bookingId, setBookingId] = useState('');
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
   const [autoSentWhatsApp, setAutoSentWhatsApp] = useState(false);
+  const [receiptImageUrl, setReceiptImageUrl] = useState(null);
+  const [receiptDataUrl, setReceiptDataUrl] = useState(null);
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   const payableNow = paymentOption === 'full' 
     ? bookingSummary.total 
     : (paymentOption === 'advance' ? Math.round(bookingSummary.total / 2) : 0);
   const balanceDue = bookingSummary.total - payableNow;
 
-  // Auto-trigger WhatsApp reservation voucher to guest upon confirmation
+  // Automatically generate high-res receipt image and upload to CDN upon confirmation
   useEffect(() => {
-    if (isSubmitted && formData.phone && !autoSentWhatsApp) {
+    if (isSubmitted && bookingId && !autoSentWhatsApp) {
       setAutoSentWhatsApp(true);
-      const timer = setTimeout(() => {
-        try {
-          const currentBooking = {
-            id: bookingId,
-            guestName: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            roomName: selectedRoom?.name || 'Luxury Stay',
-            guests: formData.guests,
-            checkIn: formData.checkIn,
-            checkOut: formData.checkOut,
-            nights: bookingSummary.nights,
-            amount: bookingSummary.total,
-            paidAmount: paymentResult?.paidAmount || 0,
-            balanceAmount: paymentResult?.balanceAmount || 0,
-            paymentStatus: paymentResult?.paymentId ? (paymentOption === 'full' ? 'paid' : 'advance_paid') : 'pay_at_checkin',
-            paymentMethod: paymentResult?.method || (paymentResult?.paymentId ? 'Razorpay Online' : 'Pay on Arrival'),
-            paymentId: paymentResult?.paymentId || null,
-            basePrice: bookingSummary.basePrice,
-            tax: bookingSummary.tax
-          };
-          const msg = formatReservationWhatsAppMessage(currentBooking);
-          const url = getWhatsAppUrl(formData.phone, msg);
-          window.open(url, '_blank');
-        } catch (e) {
-          console.warn('WhatsApp auto-launch notice:', e);
-        }
-      }, 600);
-      return () => clearTimeout(timer);
+      const currentBooking = {
+        id: bookingId,
+        guestName: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        roomName: selectedRoom?.name || 'Luxury Stay',
+        guests: formData.guests,
+        checkIn: formData.checkIn,
+        checkOut: formData.checkOut,
+        nights: bookingSummary.nights,
+        amount: bookingSummary.total,
+        paidAmount: paymentResult?.paidAmount || 0,
+        balanceAmount: paymentResult?.balanceAmount || 0,
+        paymentStatus: paymentResult?.paymentId ? (paymentOption === 'full' ? 'paid' : 'advance_paid') : 'pay_at_checkin',
+        paymentMethod: paymentResult?.method || (paymentResult?.paymentId ? 'Razorpay Online' : 'Pay on Arrival'),
+        paymentId: paymentResult?.paymentId || null,
+        basePrice: bookingSummary.basePrice,
+        tax: bookingSummary.tax
+      };
+
+      setIsGeneratingReceipt(true);
+
+      // 1. Immediately render high-res receipt locally on canvas
+      getReceiptImageBlob(currentBooking)
+        .then(({ dataUrl }) => {
+          setReceiptDataUrl(dataUrl);
+
+          // 2. Upload to public CDN so WhatsApp gets a direct permanent image link
+          generateAndUploadReceiptImage(currentBooking)
+            .then(uploadedUrl => {
+              setIsGeneratingReceipt(false);
+              if (uploadedUrl) {
+                setReceiptImageUrl(uploadedUrl);
+                triggerWhatsAppWebhook({ ...currentBooking, receiptImageUrl: uploadedUrl });
+              }
+            })
+            .catch(() => setIsGeneratingReceipt(false));
+        })
+        .catch(err => {
+          console.warn('Receipt generation notice:', err);
+          setIsGeneratingReceipt(false);
+        });
+
+      // Dispatch webhook
+      triggerWhatsAppWebhook(currentBooking);
     }
-  }, [isSubmitted, formData, bookingId, paymentResult, paymentOption, bookingSummary, selectedRoom, autoSentWhatsApp]);
+  }, [isSubmitted, bookingId, formData, paymentResult, paymentOption, bookingSummary, selectedRoom, autoSentWhatsApp]);
 
   useEffect(() => {
     if (preselectedRoomId) {
@@ -267,9 +301,10 @@ export default function BookingForm({ preselectedRoomId }) {
       tax: bookingSummary.tax
     };
 
-    const whatsAppVoucherText = formatReservationWhatsAppMessage(currentConfirmedBooking);
-    const guestWhatsAppUrl = getWhatsAppUrl(formData.phone, whatsAppVoucherText);
-    const resortDeskWhatsAppUrl = getWhatsAppUrl(RESORT_WHATSAPP_PRIMARY, whatsAppVoucherText);
+    const whatsAppVoucherText = formatReservationWhatsAppMessage(currentConfirmedBooking, receiptImageUrl);
+    const resortWhatsAppUrl = getResortWhatsAppUrl(currentConfirmedBooking, RESORT_WHATSAPP_PRIMARY, receiptImageUrl);
+    const guestWhatsAppUrl = getGuestWhatsAppUrl(formData.phone, currentConfirmedBooking, receiptImageUrl);
+    const universalShareUrl = getWhatsAppShareUrl(currentConfirmedBooking, receiptImageUrl);
 
     return (
       <section className="py-24 bg-bg-light min-h-[85vh] flex items-center anim-fade">
@@ -364,38 +399,152 @@ export default function BookingForm({ preselectedRoomId }) {
                 </div>
               </div>
 
-              {/* WhatsApp Reservation Confirmation Card */}
-              <div className="p-4 sm:p-5 rounded-xl bg-emerald-50/90 border-2 border-emerald-500/70 text-left space-y-3.5 shadow-sm">
+              {/* Official Billing Receipt Image Card */}
+              <div className="p-4 sm:p-5 rounded-xl bg-slate-900 text-white space-y-3.5 shadow-md border border-slate-800 text-left">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-amber-500/20 text-accent-gold flex items-center justify-center font-bold shrink-0">
+                      <ImageIcon size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                        Official Billing Receipt Image
+                      </h4>
+                      <p className="text-[0.68rem] text-slate-400">
+                        {isGeneratingReceipt ? 'Rendering digital boarding pass receipt image...' : 'High-resolution official reservation receipt generated'}
+                      </p>
+                    </div>
+                  </div>
+                  {isGeneratingReceipt ? (
+                    <span className="flex items-center gap-1 text-[0.65rem] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full animate-pulse">
+                      <Loader2 size={10} className="animate-spin" /> Rendering
+                    </span>
+                  ) : (
+                    <span className="text-[0.65rem] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
+                      ✓ Ready
+                    </span>
+                  )}
+                </div>
+
+                {/* Receipt Image Preview Thumbnail if generated */}
+                {receiptDataUrl && (
+                  <div className="rounded-lg overflow-hidden border border-slate-700/80 bg-slate-950/60 p-2.5 flex items-center justify-between gap-3">
+                    <div 
+                      className="flex items-center gap-3 overflow-hidden cursor-pointer group"
+                      onClick={() => setShowReceiptModal(true)}
+                    >
+                      <img 
+                        src={receiptDataUrl} 
+                        alt="Reservation Boarding Pass Receipt" 
+                        className="w-14 h-20 object-cover rounded border border-slate-700 shadow-sm shrink-0 group-hover:scale-105 transition-transform"
+                      />
+                      <div className="text-left text-xs space-y-0.5 truncate">
+                        <p className="font-bold text-slate-200 truncate group-hover:text-accent-gold transition-colors">{selectedRoom?.name || 'Luxury Stay'}</p>
+                        <p className="text-[0.68rem] text-slate-400 font-mono">{bookingId}</p>
+                        <p className="text-[0.68rem] text-accent-gold font-bold">Total: ₹{Number(bookingSummary.total).toLocaleString('en-IN')}</p>
+                        <span className="text-[0.62rem] text-slate-400 underline block pt-0.5">Click to preview full image</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowReceiptModal(true)}
+                        className="px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-600 transition-colors"
+                        title="Inspect receipt image"
+                      >
+                        <Eye size={12} /> View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadReceiptImage(currentConfirmedBooking)}
+                        className="px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-600 transition-colors"
+                        title="Download receipt image"
+                      >
+                        <Download size={12} /> Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Receipt Image Quick Action Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const shared = await shareReceiptImageFile(currentConfirmedBooking, whatsAppVoucherText);
+                      if (!shared) {
+                        window.open(resortWhatsAppUrl, '_blank');
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                  >
+                    <Send size={14} /> 📲 Send Receipt to WhatsApp
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => downloadReceiptImage(currentConfirmedBooking)}
+                    className="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-100 border border-slate-600 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                  >
+                    <Download size={14} /> 📥 Download Receipt (JPG)
+                  </button>
+                </div>
+              </div>
+
+              {/* WhatsApp Reservation Confirmation & Instant Dispatch Card */}
+              <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-br from-emerald-50 via-teal-50/60 to-emerald-50 border-2 border-emerald-500/80 text-left space-y-3.5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shrink-0">
                       <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                       </svg>
                     </div>
                     <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-emerald-950 uppercase tracking-wider">
-                        WhatsApp Confirmation Sent
-                      </h4>
-                      <p className="text-[0.72rem] text-emerald-800 mt-0.5">
-                        Delivering voucher to guest: <span className="font-mono font-bold text-emerald-950">{formData.phone}</span>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs sm:text-sm font-bold text-emerald-950 uppercase tracking-wider">
+                          Connect with Resort on WhatsApp
+                        </h4>
+                        <span className="inline-flex items-center text-[0.62rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
+                          Instant
+                        </span>
+                      </div>
+                      <p className="text-[0.72rem] text-emerald-800 mt-0.5 leading-snug">
+                        Send this booking voucher directly to Peace at Peak Front Desk for immediate check-in coordination and road directions.
                       </p>
                     </div>
                   </div>
-                  <span className="shrink-0 text-[0.62rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
-                    Instant
-                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  <a
-                    href={guestWhatsAppUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md text-center"
+                {/* Primary Call to Action: Send directly to Resort Concierge */}
+                <a
+                  href={resortWhatsAppUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5 transition-all shadow-md hover:shadow-lg text-center tracking-wide"
+                >
+                  <Send size={16} /> 📲 Send Booking to Resort on WhatsApp (+91 70555 22239)
+                </a>
+
+                {/* Secondary Actions Row: Share & Copy */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const shared = await shareReceiptImageFile(currentConfirmedBooking, whatsAppVoucherText);
+                      if (!shared) {
+                        const sharedText = await shareReservationVoucher(currentConfirmedBooking);
+                        if (!sharedText) {
+                          window.open(universalShareUrl, '_blank');
+                        }
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 rounded-lg bg-white hover:bg-slate-50 active:scale-98 text-emerald-950 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                    title="Share voucher with family or travel companions via WhatsApp"
                   >
-                    <Send size={14} /> Open on WhatsApp
-                  </a>
+                    <Sparkles size={14} className="text-emerald-600" /> Share Voucher & Receipt
+                  </button>
 
                   <button
                     type="button"
@@ -404,32 +553,94 @@ export default function BookingForm({ preselectedRoomId }) {
                       setCopiedWhatsApp(true);
                       setTimeout(() => setCopiedWhatsApp(false), 2500);
                     }}
-                    className="w-full py-2.5 px-4 rounded-lg bg-white hover:bg-slate-100 active:scale-98 text-emerald-900 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                    className="w-full py-2.5 px-3 rounded-lg bg-white hover:bg-slate-50 active:scale-98 text-emerald-950 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                    title="Copy full voucher text to clipboard"
                   >
                     {copiedWhatsApp ? (
                       <>
-                        <Check size={14} className="text-emerald-600" /> Voucher Copied!
+                        <Check size={14} className="text-emerald-600 font-bold" /> Voucher Copied!
                       </>
                     ) : (
                       <>
-                        <Copy size={14} /> Copy Voucher
+                        <Copy size={14} className="text-emerald-700" /> Copy Voucher Text
                       </>
                     )}
                   </button>
                 </div>
 
-                <div className="pt-2 border-t border-emerald-200/60 flex flex-col sm:flex-row sm:items-center justify-between text-[0.68rem] text-emerald-800 gap-1">
-                  <span>Need instant route help or front-desk check-in?</span>
+                {/* Bottom Assistance & Guest receipt */}
+                <div className="pt-2 border-t border-emerald-200/70 flex flex-col sm:flex-row sm:items-center justify-between text-[0.68rem] text-emerald-900 gap-1.5">
+                  <span className="text-emerald-800">
+                    Lead Guest: <strong>{formData.name}</strong> ({formData.phone})
+                  </span>
                   <a
-                    href={resortDeskWhatsAppUrl}
+                    href={guestWhatsAppUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-bold underline hover:text-emerald-950 flex items-center gap-1"
+                    className="font-bold text-emerald-800 hover:text-emerald-950 underline flex items-center gap-1"
+                    title="Open chat to save voucher to your own WhatsApp"
                   >
-                    Resort Helpdesk (+91 70555 22239)
+                    Save Copy to My WhatsApp ({formData.phone})
                   </a>
                 </div>
               </div>
+
+              {/* Full Resolution Receipt Image Lightbox Modal */}
+              {showReceiptModal && receiptDataUrl && (
+                <div 
+                  className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+                  onClick={() => setShowReceiptModal(false)}
+                >
+                  <div 
+                    className="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl p-4 my-8 space-y-4"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <div className="text-left">
+                        <h3 className="text-sm font-bold text-slate-900">Official Reservation Receipt</h3>
+                        <p className="text-[0.7rem] text-slate-500 font-mono">{bookingId}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowReceiptModal(false)}
+                        className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="max-h-[65vh] overflow-y-auto rounded-xl border border-slate-200 shadow-inner">
+                      <img 
+                        src={receiptDataUrl} 
+                        alt="Full Boarding Pass Receipt" 
+                        className="w-full h-auto block"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => downloadReceiptImage(currentConfirmedBooking)}
+                        className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Download size={14} /> Download Receipt
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const shared = await shareReceiptImageFile(currentConfirmedBooking, whatsAppVoucherText);
+                          if (!shared) {
+                            window.open(resortWhatsAppUrl, '_blank');
+                          }
+                        }}
+                        className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Send size={14} /> Send to WhatsApp
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="text-center text-[0.65rem] text-text-dark-secondary space-y-1 pt-2">
                 <p>Check-in instructions and route directions have been sent to your email.</p>

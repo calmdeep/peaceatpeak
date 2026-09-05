@@ -48,7 +48,8 @@ import { useAppContext } from '../context/AppContext';
 import { uploadResortImageToStorage } from '../services/firebaseService';
 import { isFirebaseConfigured } from '../firebase';
 import { uploadImageToPublicCDN, RESORT_PHOTO_PRESETS } from '../services/imageUploadService';
-import { formatReservationWhatsAppMessage, getWhatsAppUrl } from '../services/whatsappService';
+import { formatReservationWhatsAppMessage, getWhatsAppUrl, getGuestWhatsAppUrl } from '../services/whatsappService';
+import { downloadReceiptImage } from '../services/receiptImageService';
 
 export default function AdminDashboard({ onBackToSite }) {
   const { 
@@ -1525,9 +1526,20 @@ export default function AdminDashboard({ onBackToSite }) {
                             <div>
                               <p className="font-bold text-slate-900">{booking.guestName}</p>
                               {booking.phone && (
-                                <a href={`tel:${booking.phone}`} className="text-[0.72rem] text-amber-700 font-semibold hover:underline block mt-0.5">
-                                  📞 {booking.phone}
-                                </a>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <a href={`tel:${booking.phone}`} className="text-[0.72rem] text-amber-700 font-semibold hover:underline">
+                                    📞 {booking.phone}
+                                  </a>
+                                  <a
+                                    href={getGuestWhatsAppUrl(booking.phone, booking)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[0.65rem] bg-emerald-50 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                    title="Send WhatsApp confirmation voucher to guest"
+                                  >
+                                    💬 WhatsApp
+                                  </a>
+                                </div>
                               )}
                             </div>
                             <div className="text-right">
@@ -2975,14 +2987,22 @@ export default function AdminDashboard({ onBackToSite }) {
                                     📞 {booking.phone}
                                   </a>
                                   <a 
-                                    href={getWhatsAppUrl(booking.phone, formatReservationWhatsAppMessage(booking))}
+                                    href={getGuestWhatsAppUrl(booking.phone, booking)}
                                     target="_blank" 
                                     rel="noopener noreferrer"
-                                    className="text-emerald-800 font-semibold flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                    className="text-emerald-800 font-semibold flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-300 hover:bg-emerald-100 transition-colors text-xs"
                                     title="Send WhatsApp Confirmation Voucher to Guest"
                                   >
-                                    💬 WhatsApp
+                                    💬 WhatsApp Voucher
                                   </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadReceiptImage(booking)}
+                                    className="text-slate-700 font-semibold flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-300 hover:bg-slate-200 transition-colors text-xs"
+                                    title="Download Boarding Pass Receipt Image (JPG)"
+                                  >
+                                    📥 Receipt Image
+                                  </button>
                                 </>
                               )}
                               {booking.email && (
@@ -3086,19 +3106,40 @@ export default function AdminDashboard({ onBackToSite }) {
                                 </select>
                               </td>
                               <td className="py-3.5 px-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm(`Delete reservation ${booking.id} for ${booking.guestName}?`)) {
-                                      removeBooking(booking.id);
-                                      showToast('🗑️ Reservation deleted from database!');
-                                    }
-                                  }}
-                                  className="pms-btn pms-btn-danger text-[0.68rem] py-1 px-2.5 uppercase font-bold"
-                                  title="Delete reservation"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {booking.phone && (
+                                    <a
+                                      href={getGuestWhatsAppUrl(booking.phone, booking)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="pms-btn bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[0.68rem] py-1 px-2 font-bold flex items-center gap-1 rounded transition-colors"
+                                      title={`Send WhatsApp voucher to ${booking.guestName} (${booking.phone})`}
+                                    >
+                                      💬 WhatsApp
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadReceiptImage(booking)}
+                                    className="pms-btn bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[0.68rem] py-1 px-2 font-semibold flex items-center gap-1 rounded transition-colors"
+                                    title={`Download receipt image for ${booking.guestName}`}
+                                  >
+                                    📥 Receipt
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`Delete reservation ${booking.id} for ${booking.guestName}?`)) {
+                                        removeBooking(booking.id);
+                                        showToast('🗑️ Reservation deleted from database!');
+                                      }
+                                    }}
+                                    className="pms-btn pms-btn-danger text-[0.68rem] py-1 px-2 uppercase font-bold"
+                                    title="Delete reservation"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
