@@ -43,7 +43,8 @@ export default function Navbar({ activeTab, setActiveTab }) {
             : 'bg-transparent'
       }`}
       style={{
-        padding: isScrolled ? '1.1rem 0' : '1.8rem 0',
+        paddingTop: isScrolled ? 'calc(1.1rem + env(safe-area-inset-top, 0px))' : 'calc(1.8rem + env(safe-area-inset-top, 0px))',
+        paddingBottom: isScrolled ? '1.1rem' : '1.8rem',
       }}
     >
       <div className="container flex justify-between items-center">

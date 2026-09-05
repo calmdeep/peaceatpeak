@@ -121,7 +121,7 @@ function MainApp() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg-light">
+    <div className="flex flex-col min-h-screen bg-[#050d09]">
       {/* Header Navigation - No login option displayed */}
       <Navbar activeTab={activeTab} setActiveTab={handleTabChange} />
 

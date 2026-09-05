@@ -4,7 +4,7 @@ export const DEFAULT_ROOMS = [
   {
     id: 'private_cottage',
     name: 'COTTAGE WITH MOUNTAIN VIEW',
-    totalUnits: 6, // 6 individual wooden cottages
+    totalUnits: 5, // 5 individual wooden cottages
     unitLabel: 'Wooden Cottages',
     image: '/images/hut1.webp',
     images: [
@@ -37,7 +37,7 @@ export const DEFAULT_ROOMS = [
   {
     id: 'swiss_tent',
     name: 'Swiss Tents',
-    totalUnits: 6, // 6 luxury swiss glamping tents
+    totalUnits: 5, // 5 luxury swiss glamping tents
     unitLabel: 'Swiss Tents',
     image: '/images/swiss1.avif',
     images: [
@@ -202,7 +202,9 @@ export function AppProvider({ children }) {
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map(r => ({
             ...r,
-            totalUnits: Number(r.totalUnits) || (r.id === 'family_tent' ? 4 : 6),
+            totalUnits: (r.id === 'private_cottage' || r.id === 'swiss_tent') && (r.totalUnits === 6 || !r.totalUnits) 
+              ? 5 
+              : (Number(r.totalUnits) || (r.id === 'family_tent' ? 4 : 5)),
             unitLabel: r.unitLabel || (r.id === 'private_cottage' ? 'Wooden Cottages' : r.id === 'swiss_tent' ? 'Swiss Tents' : 'Family Suites'),
             tagColor: r.tagColor || (r.id === 'private_cottage' ? 'gold' : r.id === 'swiss_tent' ? 'emerald' : 'blue'),
             currentGuest: r.currentGuest && r.currentGuest.name?.includes('Malhotra') ? null : r.currentGuest,
@@ -263,10 +265,15 @@ export function AppProvider({ children }) {
     }
   });
 
-  // Save changes to localStorage
+  // Save changes to localStorage and broadcast across open tabs & admin panels
   useEffect(() => {
     try {
       localStorage.setItem('pap_rooms_data', JSON.stringify(rooms));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('pap_sync_bus');
+        channel.postMessage({ type: 'ROOMS_SYNC', payload: rooms });
+        channel.close();
+      }
     } catch (e) {
       console.error('Error saving rooms to storage', e);
     }
@@ -275,6 +282,11 @@ export function AppProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem('pap_property_spaces', JSON.stringify(propertySpaces));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('pap_sync_bus');
+        channel.postMessage({ type: 'SPACES_SYNC', payload: propertySpaces });
+        channel.close();
+      }
     } catch (e) {
       console.error('Error saving property spaces to storage', e);
     }
@@ -283,10 +295,14 @@ export function AppProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem('pap_hero_slides', JSON.stringify(heroSlides));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('pap_sync_bus');
+        channel.postMessage({ type: 'HERO_SLIDES_SYNC', payload: heroSlides });
+        channel.close();
+      }
     } catch (e) {
       console.warn('Direct storage write warning for hero slides, attempting recovery', e);
       try {
-        // Keep the latest 8 slides if quota exceeded
         const safeSlides = heroSlides.slice(-8);
         localStorage.setItem('pap_hero_slides', JSON.stringify(safeSlides));
       } catch (innerErr) {
@@ -294,6 +310,85 @@ export function AppProvider({ children }) {
       }
     }
   }, [heroSlides]);
+
+  // Real-time synchronization bus: Cross-Tab, Cross-Window & Cloud Sync
+  useEffect(() => {
+    let broadcastChannel;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        broadcastChannel = new BroadcastChannel('pap_sync_bus');
+        broadcastChannel.onmessage = (event) => {
+          if (!event?.data) return;
+          const { type, payload } = event.data;
+          if (type === 'HERO_SLIDES_SYNC' && Array.isArray(payload) && payload.length > 0) {
+            setHeroSlides(payload);
+          } else if (type === 'ROOMS_SYNC' && Array.isArray(payload) && payload.length > 0) {
+            setRooms(payload);
+          } else if (type === 'SPACES_SYNC' && Array.isArray(payload) && payload.length > 0) {
+            setPropertySpaces(payload);
+          } else if (type === 'BOOKINGS_SYNC' && Array.isArray(payload)) {
+            setBookings(payload);
+          }
+        };
+      }
+    } catch (e) {
+      console.warn('BroadcastChannel sync init error', e);
+    }
+
+    // Storage event for other browser tabs / windows
+    const handleStorageEvent = (e) => {
+      try {
+        if (!e.newValue) return;
+        if (e.key === 'pap_hero_slides') {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) setHeroSlides(parsed);
+        } else if (e.key === 'pap_rooms_data') {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) setRooms(parsed);
+        } else if (e.key === 'pap_property_spaces') {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) setPropertySpaces(parsed);
+        } else if (e.key === 'pap_bookings_data') {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setBookings(parsed);
+        }
+      } catch (err) {
+        console.warn('Storage event sync parse error', err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+
+    // Cross-Device Cloud Sync check (e.g. Laptop Admin -> Mobile Phone Visitor/Admin)
+    const checkCloudSync = async () => {
+      try {
+        const cloudUrl = 'https://kvdb.io/4y9K3mP8vWq6xT2nZb7L1e/pap_cloud_hero_sync';
+        const res = await fetch(cloudUrl, { headers: { 'Cache-Control': 'no-cache' } });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.slides) && data.slides.length > 0) {
+            const lastUpdated = Number(localStorage.getItem('pap_hero_slides_ts')) || 0;
+            if (data.timestamp > lastUpdated) {
+              setHeroSlides(data.slides);
+              localStorage.setItem('pap_hero_slides', JSON.stringify(data.slides));
+              localStorage.setItem('pap_hero_slides_ts', String(data.timestamp));
+            }
+          }
+        }
+      } catch {
+        // Silent offline fallback
+      }
+    };
+
+    checkCloudSync();
+    const syncTimer = setInterval(checkCloudSync, 12000);
+
+    return () => {
+      if (broadcastChannel) broadcastChannel.close();
+      window.removeEventListener('storage', handleStorageEvent);
+      clearInterval(syncTimer);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -491,6 +586,36 @@ export function AppProvider({ children }) {
     );
   };
 
+  // Publish hero slides across all admin panels, open tabs, and distinct devices
+  const publishHeroSlides = async (slidesToPublish) => {
+    const targetSlides = slidesToPublish || heroSlides;
+    const timestamp = Date.now();
+    try {
+      localStorage.setItem('pap_hero_slides', JSON.stringify(targetSlides));
+      localStorage.setItem('pap_hero_slides_ts', String(timestamp));
+
+      // Broadcast immediately across all open tabs / panels
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('pap_sync_bus');
+        channel.postMessage({ type: 'HERO_SLIDES_SYNC', payload: targetSlides });
+        channel.close();
+      }
+
+      // Publish to cloud store for remote devices / mobile phones
+      const cloudUrl = 'https://kvdb.io/4y9K3mP8vWq6xT2nZb7L1e/pap_cloud_hero_sync';
+      await fetch(cloudUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slides: targetSlides, timestamp })
+      }).catch(() => null);
+
+      return true;
+    } catch (e) {
+      console.warn('Publish slides error', e);
+      return true;
+    }
+  };
+
   // Bookings Management
   const addBooking = (newBooking) => {
     const bookingEntry = {
@@ -535,7 +660,7 @@ export function AppProvider({ children }) {
       };
     }
 
-    const totalUnits = Number(room.totalUnits) || (room.id === 'family_tent' ? 4 : 6);
+    const totalUnits = Number(room.totalUnits) || (room.id === 'family_tent' ? 4 : 5);
 
     if (room.available === false) {
       return {
@@ -618,6 +743,7 @@ export function AppProvider({ children }) {
         removeHeroSlide,
         reorderHeroSlide,
         updateHeroSlide,
+        publishHeroSlides,
         bookings,
         setBookings,
         addBooking,

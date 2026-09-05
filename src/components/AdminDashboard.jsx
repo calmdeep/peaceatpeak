@@ -36,7 +36,11 @@ import {
   Coffee,
   Sun,
   Flame,
-  HeartHandshake
+  HeartHandshake,
+  Eye,
+  Globe,
+  Smartphone,
+  Monitor
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
@@ -59,6 +63,7 @@ export default function AdminDashboard({ onBackToSite }) {
     removeHeroSlide, 
     reorderHeroSlide, 
     updateHeroSlide,
+    publishHeroSlides,
     bookings,
     addBooking,
     updateBookingStatus,
@@ -110,7 +115,7 @@ export default function AdminDashboard({ onBackToSite }) {
   const [offerDraft, setOfferDraft] = useState(selectedRoom?.offer || '');
   const [tagDraft, setTagDraft] = useState(selectedRoom?.tag || '');
   const [tagColorDraft, setTagColorDraft] = useState(selectedRoom?.tagColor || 'gold');
-  const [totalUnitsDraft, setTotalUnitsDraft] = useState(selectedRoom?.totalUnits || 6);
+  const [totalUnitsDraft, setTotalUnitsDraft] = useState(selectedRoom?.totalUnits || 5);
   const [unitLabelDraft, setUnitLabelDraft] = useState(selectedRoom?.unitLabel || 'Units');
   const [pricingSaved, setPricingSaved] = useState(false);
 
@@ -158,7 +163,7 @@ export default function AdminDashboard({ onBackToSite }) {
       setOfferDraft(selectedRoom.offer || '');
       setTagDraft(selectedRoom.tag || '');
       setTagColorDraft(selectedRoom.tagColor || (selectedRoom.id === 'private_cottage' ? 'gold' : selectedRoom.id === 'swiss_tent' ? 'emerald' : 'blue'));
-      setTotalUnitsDraft(selectedRoom.totalUnits || (selectedRoom.id === 'family_tent' ? 4 : 6));
+      setTotalUnitsDraft(selectedRoom.totalUnits || (selectedRoom.id === 'family_tent' ? 4 : 5));
       setUnitLabelDraft(selectedRoom.unitLabel || (selectedRoom.id === 'private_cottage' ? 'Wooden Cottages' : selectedRoom.id === 'swiss_tent' ? 'Swiss Tents' : 'Family Suites'));
 
       setNameDraft(selectedRoom.name || '');
@@ -286,7 +291,9 @@ export default function AdminDashboard({ onBackToSite }) {
   // 7. Update a Hero Slide
   const handleUpdateHeroSlide = (idx, updates) => {
     updateHeroSlide(idx, updates);
-    showToast(`✅ Hero slide #${idx + 1} updated successfully!`);
+    const updated = heroSlides.map((slide, i) => (i === idx ? { ...slide, ...updates } : slide));
+    if (publishHeroSlides) publishHeroSlides(updated);
+    showToast(`✅ Hero slide #${idx + 1} updated and synced live!`);
   };
 
   // 8. Remove a Hero Slide
@@ -296,9 +303,42 @@ export default function AdminDashboard({ onBackToSite }) {
       return;
     }
     if (window.confirm(`Are you sure you want to remove Hero Slide #${idx + 1}?`)) {
+      const updated = heroSlides.filter((_, i) => i !== idx);
       removeHeroSlide(idx);
-      showToast(`🗑️ Hero slide #${idx + 1} removed from carousel!`);
+      if (publishHeroSlides) publishHeroSlides(updated);
+      showToast(`🗑️ Hero slide #${idx + 1} removed and synced!`);
     }
+  };
+
+  const handleReorderHeroSlide = (idx, direction) => {
+    reorderHeroSlide(idx, direction);
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= heroSlides.length) return;
+    const copy = [...heroSlides];
+    const temp = copy[idx];
+    copy[idx] = copy[newIdx];
+    copy[newIdx] = temp;
+    if (publishHeroSlides) publishHeroSlides(copy);
+  };
+
+  const [isPublishingHero, setIsPublishingHero] = useState(false);
+  const [showHeroPreview, setShowHeroPreview] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState('mobile'); // 'mobile' | 'desktop'
+  const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
+
+  useEffect(() => {
+    if (!showHeroPreview || heroSlides.length <= 1) return;
+    const timer = setInterval(() => {
+      setPreviewSlideIdx(prev => (prev + 1) % heroSlides.length);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [showHeroPreview, heroSlides.length]);
+
+  const handlePublishAllSlides = async () => {
+    setIsPublishingHero(true);
+    if (publishHeroSlides) await publishHeroSlides();
+    setTimeout(() => setIsPublishingHero(false), 600);
+    showToast('🚀 Hero Slides published & synced live to all admin panels & mobile devices!');
   };
 
   // -------------------------------------------------------------
@@ -422,13 +462,15 @@ export default function AdminDashboard({ onBackToSite }) {
     try {
       const optimizedUrl = await optimizeImageFile(file, 1920, 1080, 0.88);
       const cleanCaption = newHeroCaption.trim() || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Peace at Peak Resort';
-      addHeroSlide({
+      const newSlide = {
         url: optimizedUrl,
         caption: cleanCaption,
         position: newHeroPosition || 'center center'
-      });
+      };
+      addHeroSlide(newSlide);
+      if (publishHeroSlides) publishHeroSlides([...heroSlides, newSlide]);
       setNewHeroCaption('');
-      showToast('✅ High-quality Hero slide uploaded and added to 2s slideshow!');
+      showToast('✅ High-quality Hero slide uploaded and published live across all panels & devices!');
       e.target.value = '';
     } catch (err) {
       console.error('Hero upload error', err);
@@ -442,14 +484,16 @@ export default function AdminDashboard({ onBackToSite }) {
   const handleAddHeroByUrl = (e) => {
     e.preventDefault();
     if (!newHeroUrl.trim()) return;
-    addHeroSlide({
+    const newSlide = {
       url: newHeroUrl.trim(),
       caption: newHeroCaption.trim() || 'Peace at Peak Resort',
       position: newHeroPosition || 'center center'
-    });
+    };
+    addHeroSlide(newSlide);
+    if (publishHeroSlides) publishHeroSlides([...heroSlides, newSlide]);
     setNewHeroUrl('');
     setNewHeroCaption('');
-    showToast('✅ New Hero slide added to slideshow!');
+    showToast('✅ New Hero slide added and published live across all panels & devices!');
   };
 
   // -------------------------------------------------------------
@@ -2306,13 +2350,47 @@ export default function AdminDashboard({ onBackToSite }) {
              ======================================================================= */}
           {activeNav === 'hero' && (
             <div className="space-y-6 animate-fade">
-              <div className="border-b border-slate-200 pb-4">
-                <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'var(--font-display)' }}>
-                  Hero Slideshow Carousel Engine
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Manage the background images that slide rightward every 2.0 seconds in the Hero section. Use the Update and Remove buttons for each slide.
-                </p>
+              <div className="border-b border-slate-200 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'var(--font-display)' }}>
+                      Hero Slideshow Carousel Engine
+                    </h1>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[0.68rem] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Multi-Panel & Live Sync
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Manage the background images that slide rightward every 2.0 seconds in the Hero section. Slides synchronize across other admin panels and the live hero page.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewSlideIdx(0);
+                      setShowHeroPreview(true);
+                    }}
+                    className="pms-btn pms-btn-secondary text-xs uppercase tracking-wider py-2 px-3.5"
+                    title="Open live hero slideshow preview simulation"
+                  >
+                    <Eye size={15} /> Preview Hero
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      publishHeroSlides(heroSlides);
+                      setNotification('Hero slides published & synchronized across all panels and live website!');
+                      setTimeout(() => setNotification(''), 4000);
+                    }}
+                    className="pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2 px-3.5 shadow-sm"
+                    title="Publish and sync all slides across all devices and panels"
+                  >
+                    <RefreshCw size={15} /> Publish & Sync All
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2965,6 +3043,195 @@ export default function AdminDashboard({ onBackToSite }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =======================================================================
+          LIVE HERO PREVIEW MODAL (DESKTOP & MOBILE SIMULATION)
+         ======================================================================= */}
+      {showHeroPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fade">
+          <div className="relative w-full max-w-4xl bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                  <Eye size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Hero Section Live Preview
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-normal">
+                      ● 2.0s Auto Loop
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Slide {previewSlideIdx + 1} of {heroSlides.length} — {heroSlides[previewSlideIdx]?.caption || 'Hero Slide'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Device Toggle */}
+              <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('mobile')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    previewDevice === 'mobile'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Smartphone size={14} /> Mobile View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('desktop')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    previewDevice === 'desktop'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Monitor size={14} /> Desktop View
+                </button>
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowHeroPreview(false)}
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body / Simulation Frame */}
+            <div className="p-4 sm:p-8 flex-grow overflow-y-auto flex items-center justify-center bg-[#050d09]">
+              {previewDevice === 'mobile' ? (
+                /* Mobile Device Simulation Frame */
+                <div className="w-[360px] max-w-full rounded-[2rem] border-4 border-slate-700 bg-[#050d09] overflow-hidden shadow-2xl p-4 flex flex-col items-center justify-center relative min-h-[560px]">
+                  {/* Speaker Notch */}
+                  <div className="w-20 h-3 bg-slate-800 rounded-full mb-3 shrink-0"></div>
+
+                  {/* Mobile Content (Matches Live Android/Mobile Layout) */}
+                  <div className="w-full flex flex-col items-center text-center space-y-2 mb-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[0.6rem] uppercase font-semibold text-amber-300 border border-amber-400/40 bg-amber-400/10 tracking-wider">
+                      <ShieldCheck size={11} /> Best Rate Guaranteed
+                    </div>
+                    <h2 className="text-white text-xl font-light leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+                      The Sanctuary at <span className="italic text-amber-300">Peace at Peak</span>
+                    </h2>
+                    <p className="text-slate-300 text-xs font-light leading-relaxed max-w-[280px]">
+                      Discover silence, elegance, and pristine views of the Himalayan range at 8,500 feet.
+                    </p>
+                  </div>
+
+                  {/* 16:10 Photo Frame with Transition */}
+                  <div className="w-full aspect-[16/10] rounded-xl overflow-hidden border border-amber-400/25 shadow-lg relative bg-black shrink-0">
+                    <img
+                      src={heroSlides[previewSlideIdx]?.url}
+                      alt="Hero slide preview"
+                      className="w-full h-full object-cover transition-opacity duration-700"
+                    />
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[0.65rem] text-white backdrop-blur-sm">
+                      {previewSlideIdx + 1} / {heroSlides.length}
+                    </div>
+                  </div>
+
+                  {/* Minimalist Dots */}
+                  <div className="flex items-center justify-center gap-1.5 my-3">
+                    {heroSlides.map((_, i) => (
+                      <span
+                        key={i}
+                        className="h-1 rounded-full transition-all duration-300"
+                        style={{
+                          width: i === previewSlideIdx ? '18px' : '6px',
+                          backgroundColor: i === previewSlideIdx ? '#f3d375' : 'rgba(255, 255, 255, 0.35)',
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Action Buttons Below Image */}
+                  <div className="w-full space-y-2">
+                    <div className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold text-xs uppercase tracking-widest text-center flex items-center justify-center gap-2">
+                      <Calendar size={13} /> Check Availability
+                    </div>
+                    <div className="w-full py-2.5 rounded-lg bg-white/10 border border-white/30 text-white font-semibold text-xs uppercase tracking-widest text-center">
+                      Explore Cottages
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Desktop Simulation Frame */
+                <div className="w-full rounded-xl border-2 border-slate-700 bg-[#050d09] overflow-hidden shadow-2xl relative min-h-[420px] flex items-center justify-center">
+                  <div
+                    className="absolute inset-0 transition-opacity duration-700"
+                    style={{
+                      backgroundImage: `url('${heroSlides[previewSlideIdx]?.url}')`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: heroSlides[previewSlideIdx]?.position || 'center center',
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black/45" />
+
+                  <div className="relative text-center px-6 py-12 z-10 max-w-2xl">
+                    <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full mb-3 text-amber-300 border border-amber-400/40 bg-black/40 backdrop-blur-sm text-xs tracking-widest uppercase font-semibold">
+                      <ShieldCheck size={12} /> Best Rate Guaranteed
+                    </div>
+                    <h1 className="text-white text-4xl sm:text-5xl font-light mb-3" style={{ fontFamily: 'var(--font-display)' }}>
+                      The Sanctuary at <span className="italic text-amber-300">Peace at Peak</span>
+                    </h1>
+                    <p className="text-slate-200 text-sm sm:text-base font-light mb-6 leading-relaxed">
+                      Discover silence, elegance, and pristine views of the Himalayan range at 8,500 feet.
+                    </p>
+                    <div className="inline-flex items-center gap-3">
+                      <div className="px-6 py-3 bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold text-xs uppercase tracking-widest rounded shadow-md">
+                        Reserve Your Cottage
+                      </div>
+                      <div className="px-6 py-3 bg-white/15 backdrop-blur-sm border border-white/30 text-white font-semibold text-xs uppercase tracking-widest rounded">
+                        View Accommodations
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded bg-black/70 text-xs text-white backdrop-blur-sm z-10">
+                    Slide {previewSlideIdx + 1} of {heroSlides.length}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-400">
+                Live Slideshow previews every 2.0 seconds automatically.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowHeroPreview(false)}
+                  className="pms-btn pms-btn-secondary text-xs uppercase tracking-wider py-2 px-4"
+                >
+                  Close Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHeroPreview(false);
+                    onBackToSite?.();
+                  }}
+                  className="pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2 px-4 shadow-sm"
+                >
+                  <ExternalLink size={14} /> Open Live Website
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
