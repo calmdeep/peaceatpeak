@@ -25,12 +25,13 @@ const NEARBY_PLACES_DATA = [
   {
     id: 'tehri_lake',
     name: 'Tehri Lake & Dam',
-    image: '/images/place_lake.jpg',
+    image: '/images/tehri_lake_paragliding.jpg',
     category: 'Adventure',
     distance: '35 km from resort',
     duration: '1 hour drive',
-    description: 'A massive turquoise reservoir surrounded by rolling green hills. Experience high-thrill water activities like jet-skiing, boating, and parasailing.',
-    tips: 'Best for: Jet-skiing, boat safaris, valley sightseeing.'
+    description: 'A massive turquoise reservoir surrounded by rolling green hills. Experience high-thrill adventure sports like paragliding, jet-skiing, speed boating, and floating lake docks.',
+    tips: 'Best for: Paragliding, jet-skiing, boat safaris, water sports.',
+    imagePosition: 'center 35%'
   },
   {
     id: 'dhanaulti',
@@ -134,23 +135,25 @@ export default function NearbyPlaces() {
                 style={{ border: '1px solid rgba(223, 184, 108, 0.15)' }}
               >
                 {/* Image visual with Overlay Text */}
-                <div className="relative h-60 overflow-hidden">
+                <div className="relative aspect-[16/11] sm:h-64 w-full overflow-hidden bg-slate-900">
                   <img
                     src={place.image}
                     alt={place.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    style={{ objectPosition: place.imagePosition || 'center center' }}
+                    loading="lazy"
                   />
                   {/* Luxury overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-bg-dark/90 via-bg-dark/20 to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-bg-dark/85 via-bg-dark/20 to-transparent pointer-events-none" />
 
                   {/* Details sitting on Image bottom */}
-                  <div className="absolute bottom-4 left-4 right-4 z-10 flex justify-between items-end">
+                  <div className="absolute bottom-3.5 left-4 right-4 z-10 flex justify-between items-end">
                     <span
                       className="bg-accent-gold text-primary-deep text-[0.55rem] tracking-widest font-bold py-1 px-2.5 uppercase"
                     >
                       {place.category}
                     </span>
-                    <span className="text-white text-xs font-medium tracking-wide flex items-center gap-1">
+                    <span className="text-white text-xs font-medium tracking-wide flex items-center gap-1 drop-shadow-sm">
                       <MapPin size={12} className="text-accent-gold" />
                       {place.distance}
                     </span>
