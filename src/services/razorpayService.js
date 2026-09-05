@@ -21,6 +21,11 @@ export const loadRazorpayScript = () => {
   });
 };
 
+export const isPlaceholderRazorpayKey = () => {
+  const key = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
+  return key === 'rzp_test_1DP5mmOlF5G5ag' || key.includes('YOUR_KEY');
+};
+
 export const initiateRazorpayPayment = async ({
   amount, // in INR rupees
   bookingId,

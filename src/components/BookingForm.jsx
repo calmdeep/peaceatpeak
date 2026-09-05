@@ -15,7 +15,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { initiateRazorpayPayment } from '../services/razorpayService';
+import { initiateRazorpayPayment, isPlaceholderRazorpayKey } from '../services/razorpayService';
 
 export default function BookingForm({ preselectedRoomId }) {
   const { rooms, addBooking, getEffectivePrice, getRoomInventory } = useAppContext();
@@ -38,6 +38,7 @@ export default function BookingForm({ preselectedRoomId }) {
   const [paymentOption, setPaymentOption] = useState('full');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);
+  const [simulationModal, setSimulationModal] = useState(null);
 
   const selectedRoom = rooms.find(r => r.id === formData.roomId) || rooms[0] || {};
   const currentInv = getRoomInventory
@@ -183,6 +184,13 @@ export default function BookingForm({ preselectedRoomId }) {
         },
         onDismiss: () => {
           setIsProcessingPayment(false);
+          if (isPlaceholderRazorpayKey()) {
+            setSimulationModal({
+              id,
+              payableNow,
+              balanceDue
+            });
+          }
         }
       });
     } catch (err) {
@@ -681,6 +689,80 @@ export default function BookingForm({ preselectedRoomId }) {
           </div>
         </div>
       </div>
+
+      {/* Razorpay Test Simulation Modal for Placeholder Key */}
+      {simulationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-4 border border-border-light text-center">
+            <div className="w-14 h-14 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+              <Sparkles size={28} />
+            </div>
+            
+            <h3 className="text-xl font-bold text-slate-900 font-display">
+              Razorpay Sandbox Simulation
+            </h3>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Razorpay standard test accounts require your personal free Key ID to enable test UPI/Cards. 
+            </p>
+
+            <div className="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200/80 text-xs text-amber-950 space-y-1 text-left">
+              <p className="font-bold flex items-center gap-1.5 text-amber-900">
+                <Lock size={13} /> Test Mode Sandbox Ready
+              </p>
+              <p className="text-[0.72rem] text-amber-900/90 leading-normal">
+                Would you like to <strong>simulate a verified payment</strong> now to inspect the Cloud Firestore sync and Boarding Pass voucher?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSimulationModal(null)}
+                className="w-1/2 py-3 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const simBooking = {
+                    id: simulationModal.id,
+                    guestName: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    roomId: formData.roomId,
+                    roomName: selectedRoom.name,
+                    checkIn: formData.checkIn,
+                    checkOut: formData.checkOut,
+                    nights: bookingSummary.nights,
+                    amount: bookingSummary.total,
+                    status: 'confirmed',
+                    paymentStatus: paymentOption === 'full' ? 'paid' : 'advance_paid',
+                    paymentMethod: 'Razorpay Sandbox (Simulated UPI)',
+                    paymentId: `pay_sim_${Math.floor(100000 + Math.random() * 900000)}`,
+                    paidAmount: simulationModal.payableNow,
+                    balanceAmount: simulationModal.balanceDue,
+                    createdAt: new Date().toISOString()
+                  };
+                  if (addBooking) addBooking(simBooking);
+                  setPaymentResult({
+                    paymentId: simBooking.paymentId,
+                    method: 'Razorpay Sandbox (Simulated UPI)',
+                    paidAmount: simulationModal.payableNow,
+                    balanceAmount: simulationModal.balanceDue
+                  });
+                  setSimulationModal(null);
+                  setIsSubmitted(true);
+                }}
+                className="w-1/2 py-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md transition-colors"
+              >
+                Simulate Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
