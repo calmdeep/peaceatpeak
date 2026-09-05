@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Building2, 
   LayoutDashboard, 
@@ -18,6 +18,7 @@ import {
   Trash2, 
   ArrowUp, 
   ArrowDown, 
+  ArrowLeft,
   ExternalLink, 
   LogOut, 
   Menu, 
@@ -27,6 +28,7 @@ import {
   RefreshCw, 
   AlertTriangle,
   UserCheck,
+  ChevronLeft,
   ChevronRight,
   ShieldCheck,
   Layers,
@@ -325,7 +327,8 @@ export default function AdminDashboard({ onBackToSite }) {
   const [showHeroPreview, setShowHeroPreview] = useState(false);
   const [previewDevice, setPreviewDevice] = useState('mobile'); // 'mobile' | 'desktop'
   const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
-  const [fullScreenPreview, setFullScreenPreview] = useState(null); // { url, title, subtitle }
+  const [fullScreenPreview, setFullScreenPreview] = useState(null); // { url, title, subtitle, images, currentIndex }
+  const touchStartXRef = useRef(null);
 
   useEffect(() => {
     if (!showHeroPreview || heroSlides.length <= 1) return;
@@ -334,6 +337,30 @@ export default function AdminDashboard({ onBackToSite }) {
     }, 2000);
     return () => clearInterval(timer);
   }, [showHeroPreview, heroSlides.length]);
+
+  // Keyboard navigation for full-screen preview lightbox (ArrowLeft, ArrowRight, Escape)
+  useEffect(() => {
+    if (!fullScreenPreview) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setFullScreenPreview(null);
+      } else if (e.key === 'ArrowLeft') {
+        setFullScreenPreview(prev => {
+          if (!prev || !prev.images || prev.images.length <= 1) return prev;
+          const nextIdx = (prev.currentIndex - 1 + prev.images.length) % prev.images.length;
+          return { ...prev, currentIndex: nextIdx };
+        });
+      } else if (e.key === 'ArrowRight') {
+        setFullScreenPreview(prev => {
+          if (!prev || !prev.images || prev.images.length <= 1) return prev;
+          const nextIdx = (prev.currentIndex + 1) % prev.images.length;
+          return { ...prev, currentIndex: nextIdx };
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fullScreenPreview]);
 
   const handlePublishAllSlides = async () => {
     setIsPublishingHero(true);
@@ -1184,11 +1211,15 @@ export default function AdminDashboard({ onBackToSite }) {
                         <div>
                           {/* Full-Size Unzoomed Image Preview Stage (No Zoom, 100% Complete Aspect) */}
                           <div 
-                            onClick={() => setFullScreenPreview({
-                              url: room.image || room.images?.[0],
-                              title: room.name,
-                              subtitle: `₹${effPrice.toLocaleString()} / night • ${liveInfo.totalUnits} Units Total`
-                            })}
+                            onClick={() => {
+                              const imgs = room.images && room.images.length > 0 ? room.images : [room.image];
+                              setFullScreenPreview({
+                                images: imgs,
+                                currentIndex: 0,
+                                title: room.name,
+                                subtitle: `₹${effPrice.toLocaleString()} / night • ${liveInfo.totalUnits} Units Total`
+                              });
+                            }}
                             className="pms-img-preview-stage mb-3"
                             title="Click to view 100% full-size uncropped image"
                           >
@@ -1807,7 +1838,8 @@ export default function AdminDashboard({ onBackToSite }) {
                             >
                               <div 
                                 onClick={() => setFullScreenPreview({
-                                  url: imgUrl,
+                                  images: selectedRoom.images || [],
+                                  currentIndex: idx,
                                   title: `${selectedRoom.name} — Photo ${idx + 1}`,
                                   subtitle: isPrimary ? 'Primary Cover Photo' : 'Room Gallery Image'
                                 })}
@@ -2058,7 +2090,8 @@ export default function AdminDashboard({ onBackToSite }) {
                             >
                               <div 
                                 onClick={() => setFullScreenPreview({
-                                  url: imgUrl,
+                                  images: selectedSpace.images || [],
+                                  currentIndex: idx,
                                   title: `${selectedSpace.name} — Photo ${idx + 1}`,
                                   subtitle: isPrimary ? 'Main Display Photo' : 'Space Showcase Image'
                                 })}
@@ -2444,7 +2477,8 @@ export default function AdminDashboard({ onBackToSite }) {
 
                       <div 
                         onClick={() => setFullScreenPreview({
-                          url: slide.url,
+                          images: heroSlides.map(s => s.url),
+                          currentIndex: idx,
                           title: `Hero Slide ${idx + 1}`,
                           subtitle: slide.caption || 'Hero Background Slide'
                         })}
@@ -3289,36 +3323,56 @@ export default function AdminDashboard({ onBackToSite }) {
       )}
 
       {/* =======================================================================
-          GLOBAL FULL-SIZE IMAGE PREVIEW LIGHTBOX (100% UNZOOMED / UNCROPPED)
+          GLOBAL FULL-SIZE IMAGE PREVIEW LIGHTBOX WITH SWAPPING & GO BACK
          ======================================================================= */}
       {fullScreenPreview && (
         <div 
-          className="fixed inset-0 z-[100] flex flex-col items-center justify-between bg-black/95 backdrop-blur-md p-3 sm:p-6 animate-fade"
+          className="fixed inset-0 z-[100] flex flex-col justify-between bg-black/95 backdrop-blur-md p-3 sm:p-6 animate-fade"
           onClick={() => setFullScreenPreview(null)}
         >
           {/* Header Bar */}
           <div 
-            className="w-full max-w-5xl flex items-center justify-between pb-3 text-white select-none z-10 shrink-0"
+            className="w-full max-w-6xl mx-auto flex items-center justify-between pb-3 text-white select-none z-10 shrink-0 border-b border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                {fullScreenPreview.title}
-              </h3>
-              {fullScreenPreview.subtitle && (
-                <p className="text-xs text-slate-400">{fullScreenPreview.subtitle}</p>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="hidden sm:inline-block px-3 py-1 rounded-full text-[0.68rem] uppercase font-bold tracking-wider bg-slate-800 text-amber-300 border border-slate-700">
-                Full Original Size • No Zoom
-              </span>
+            {/* Go Back Button & Title */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button
                 type="button"
                 onClick={() => setFullScreenPreview(null)}
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+                className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-semibold text-xs tracking-wider uppercase transition-colors shrink-0"
+                title="Go back to dashboard (or press Esc)"
+              >
+                <ArrowLeft size={16} /> Go Back
+              </button>
+
+              <div className="min-w-0">
+                <h3 className="text-xs sm:text-base font-bold text-white tracking-wide flex items-center gap-2 truncate">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                  <span className="truncate">{fullScreenPreview.title}</span>
+                </h3>
+                {fullScreenPreview.subtitle && (
+                  <p className="text-[0.68rem] text-slate-400 truncate hidden sm:block">{fullScreenPreview.subtitle}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Current Slide Counter & Badges */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {fullScreenPreview.images && fullScreenPreview.images.length > 1 && (
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[0.7rem] sm:text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  {fullScreenPreview.currentIndex + 1} / {fullScreenPreview.images.length}
+                </span>
+              )}
+              
+              <span className="hidden md:inline-block px-2.5 py-1 rounded-full text-[0.65rem] uppercase font-bold tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+                Full Size • No Zoom
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setFullScreenPreview(null)}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 active:bg-white/35 text-white flex items-center justify-center transition-colors"
                 title="Close full-size preview"
               >
                 <X size={20} />
@@ -3326,30 +3380,132 @@ export default function AdminDashboard({ onBackToSite }) {
             </div>
           </div>
 
-          {/* Main Full Size Unzoomed Image Stage */}
+          {/* Main Stage with Side Arrows (Desktop & Mobile) & Touch Swipe */}
           <div 
-            className="w-full max-w-5xl flex-grow pms-lightbox-stage overflow-hidden relative rounded-2xl border border-white/10 bg-slate-950/90 p-2 sm:p-4 shadow-2xl my-auto"
+            className="w-full max-w-6xl mx-auto flex-grow flex items-center justify-between relative my-2 sm:my-4 overflow-hidden select-none"
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              touchStartXRef.current = e.touches[0]?.clientX || 0;
+            }}
+            onTouchEnd={(e) => {
+              if (touchStartXRef.current === null) return;
+              const touchEndX = e.changedTouches[0]?.clientX || 0;
+              const diff = touchStartXRef.current - touchEndX;
+              if (Math.abs(diff) > 40 && fullScreenPreview?.images && fullScreenPreview.images.length > 1) {
+                if (diff > 0) {
+                  // Swipe Left -> Next Image
+                  setFullScreenPreview(prev => ({
+                    ...prev,
+                    currentIndex: (prev.currentIndex + 1) % prev.images.length
+                  }));
+                } else {
+                  // Swipe Right -> Previous Image
+                  setFullScreenPreview(prev => ({
+                    ...prev,
+                    currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+                  }));
+                }
+              }
+              touchStartXRef.current = null;
+            }}
           >
-            <img
-              src={fullScreenPreview.url}
-              alt={fullScreenPreview.title}
-            />
+            {/* Previous Image Arrow */}
+            {fullScreenPreview.images && fullScreenPreview.images.length > 1 ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFullScreenPreview(prev => ({
+                    ...prev,
+                    currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+                  }));
+                }}
+                className="z-20 w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-900/80 hover:bg-amber-500 text-white hover:text-slate-950 border border-white/20 hover:border-amber-400 shadow-2xl flex items-center justify-center transition-all shrink-0 active:scale-95"
+                title="Swap to previous image (or press Left Arrow)"
+              >
+                <ChevronLeft size={28} />
+              </button>
+            ) : <div className="w-11 sm:w-14" />}
+
+            {/* Central Uncropped Image Container */}
+            <div className="flex-grow flex items-center justify-center px-2 sm:px-6 max-h-[74vh] overflow-hidden">
+              <img
+                key={fullScreenPreview.currentIndex}
+                src={
+                  typeof fullScreenPreview.images?.[fullScreenPreview.currentIndex] === 'string'
+                    ? fullScreenPreview.images[fullScreenPreview.currentIndex]
+                    : fullScreenPreview.images?.[fullScreenPreview.currentIndex]?.url || fullScreenPreview.url
+                }
+                alt={fullScreenPreview.title}
+                className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl transition-all duration-300 animate-fade"
+                style={{
+                  imageRendering: 'high-quality',
+                }}
+              />
+            </div>
+
+            {/* Next Image Arrow */}
+            {fullScreenPreview.images && fullScreenPreview.images.length > 1 ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFullScreenPreview(prev => ({
+                    ...prev,
+                    currentIndex: (prev.currentIndex + 1) % prev.images.length
+                  }));
+                }}
+                className="z-20 w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-900/80 hover:bg-amber-500 text-white hover:text-slate-950 border border-white/20 hover:border-amber-400 shadow-2xl flex items-center justify-center transition-all shrink-0 active:scale-95"
+                title="Swap to next image (or press Right Arrow)"
+              >
+                <ChevronRight size={28} />
+              </button>
+            ) : <div className="w-11 sm:w-14" />}
           </div>
 
-          {/* Footer Bar */}
+          {/* Bottom Controls & Thumbnail Strip */}
           <div 
-            className="w-full max-w-5xl flex items-center justify-between pt-3 text-slate-400 text-xs select-none shrink-0"
+            className="w-full max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-slate-400 text-xs select-none shrink-0 border-t border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="truncate max-w-xs sm:max-w-md">Source: {fullScreenPreview.url}</span>
-            <button
-              type="button"
-              onClick={() => setFullScreenPreview(null)}
-              className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-xs"
-            >
-              Close Full View
-            </button>
+            {/* Quick Thumbnail Swapper Strip */}
+            {fullScreenPreview.images && fullScreenPreview.images.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto py-1 max-w-full">
+                {fullScreenPreview.images.map((imgItem, idx) => {
+                  const imgUrl = typeof imgItem === 'string' ? imgItem : imgItem.url;
+                  const isCurrent = idx === fullScreenPreview.currentIndex;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setFullScreenPreview(prev => ({ ...prev, currentIndex: idx }))}
+                      className={`w-12 h-9 sm:w-14 sm:h-10 rounded-md overflow-hidden shrink-0 transition-all border-2 ${
+                        isCurrent 
+                          ? 'border-amber-400 scale-105 shadow-md shadow-amber-500/20' 
+                          : 'border-white/20 opacity-50 hover:opacity-100 hover:border-white/50'
+                      }`}
+                      title={`Swap to image ${idx + 1}`}
+                    >
+                      <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              <span className="text-[0.7rem] text-slate-400 truncate max-w-[200px] sm:max-w-xs">
+                Use arrows or tap thumbnails to swap
+              </span>
+              <button
+                type="button"
+                onClick={() => setFullScreenPreview(null)}
+                className="px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs transition-colors shrink-0 flex items-center gap-1.5"
+              >
+                <ArrowLeft size={14} /> Go Back
+              </button>
+            </div>
           </div>
         </div>
       )}
