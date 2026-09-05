@@ -30,7 +30,7 @@ export default function Hero({ onBookClick, onExploreClick }) {
     }
   };
 
-  const activeSlide = slides.length > 0 ? slides[(currentIndex - 1 + slides.length) % slides.length] : null;
+  const activeIndex = slides.length > 0 ? (currentIndex - 1 + slides.length) % slides.length : 0;
 
   return (
     <section className="relative min-h-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[#050d09]">
@@ -192,62 +192,71 @@ export default function Hero({ onBookClick, onExploreClick }) {
 
       {/* =========================================================================
           2. MOBILE & ANDROID VIEW (< 768px):
-             - Text strictly ABOVE the image
-             - Middle stage: 100% full, uncropped, unzoomed image
-             - Action buttons strictly BELOW the image
+             - Harmonious centered luxury flow with perfect balanced spacing
+             - ZONE A: High-visibility badge, title, and crisp off-white subtitle
+             - ZONE B: Crisp 16:10 photo card with subtle gold border & shadow (NO overlay)
+             - ZONE C: High-visibility Gold Primary & Frosted Secondary buttons
          ========================================================================= */}
       <div className="hero-mobile-wrapper">
-        {/* Dynamic ambient backdrop tone from active slide */}
-        {activeSlide && (
-          <div 
-            className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-20 scale-125 pointer-events-none transition-all duration-1000"
-            style={{ backgroundImage: `url('${activeSlide.url}')` }}
-          />
-        )}
-
+        
         {/* -------------------------------------------------------------
-            ZONE A: TEXT ABOVE THE IMAGE
+            ZONE A: TEXT ABOVE THE IMAGE (High Visibility & Perfect Spacing)
            ------------------------------------------------------------- */}
-        <div className="relative z-10 flex flex-col items-center text-center space-y-2 pt-1 max-w-sm mx-auto">
-          {/* Badge */}
+        <div className="flex flex-col items-center text-center space-y-1.5 w-full max-w-[380px] mx-auto">
+          {/* Subtle Luxury Badge */}
           <div 
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full glass-panel-dark text-accent-gold border border-border-gold text-[0.62rem] uppercase tracking-widest font-medium"
-            style={{ letterSpacing: '0.18em' }}
-          >
-            <ShieldCheck size={11} className="text-accent-gold" /> Best Rate Guaranteed
-          </div>
-
-          {/* Heading */}
-          <h1 
-            className="text-white text-2xl sm:text-3xl font-light tracking-wide leading-tight"
-            style={{ 
-              fontFamily: 'var(--font-display)',
-              textShadow: '0 2px 10px rgba(0, 0, 0, 0.9)'
+            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[0.62rem] uppercase font-semibold"
+            style={{
+              color: '#f3d375',
+              border: '1px solid rgba(243, 211, 117, 0.45)',
+              background: 'rgba(243, 211, 117, 0.1)',
+              letterSpacing: '0.2em',
+              textShadow: '0 1px 2px rgba(0,0,0,0.6)'
             }}
           >
-            The Sanctuary at <span className="italic text-accent-gold">Peace at Peak</span>
+            <ShieldCheck size={12} color="#f3d375" /> Best Rate Guaranteed
+          </div>
+
+          {/* Main Title */}
+          <h1 
+            className="text-white text-2xl sm:text-3xl font-light tracking-wide leading-tight mt-1"
+            style={{ fontFamily: 'var(--font-display)', textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
+          >
+            The Sanctuary at <span className="italic font-normal" style={{ color: '#f3d375' }}>Peace at Peak</span>
           </h1>
 
           {/* Gold Divider */}
-          <div className="gold-divider my-1" />
+          <div 
+            className="my-1"
+            style={{
+              width: '40px',
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent, #f3d375, transparent)'
+            }}
+          />
 
-          {/* Description */}
+          {/* Description (Crisp Off-White Slate-200 with High Contrast) */}
           <p 
-            className="text-text-light-secondary text-xs font-light leading-relaxed px-1"
-            style={{ textShadow: '0 1px 6px rgba(0, 0, 0, 0.9)' }}
+            className="font-light leading-relaxed max-w-[340px] mx-auto px-1"
+            style={{ 
+              color: '#f1f5f9', 
+              fontSize: '0.8rem',
+              textShadow: '0 1px 4px rgba(0,0,0,0.95)'
+            }}
           >
             Discover silence, elegance, and pristine views of the Himalayan range at 8,500 feet.
           </p>
         </div>
 
         {/* -------------------------------------------------------------
-            ZONE B: THE FULL UNZOOMED IMAGE STAGE (NO TEXT/BUTTONS OVERLAY)
+            ZONE B: THE FULL UNZOOMED IMAGE STAGE (NO OVERLAPS)
            ------------------------------------------------------------- */}
-        <div className="relative z-10 w-full my-auto py-2">
+        <div className="w-full max-w-[380px] mx-auto">
+          {/* Main Photo Frame */}
           <div className="hero-mobile-stage">
             {/* Smooth 2s Sliding Track for Mobile Stage */}
             <div
-              className="absolute inset-0 flex"
+              className="absolute inset-0 flex h-full"
               onTransitionEnd={handleTransitionEnd}
               style={{
                 width: `${track.length * 100}%`,
@@ -261,62 +270,63 @@ export default function Hero({ onBookClick, onExploreClick }) {
               {track.map((slide, idx) => (
                 <div
                   key={idx}
-                  className="relative h-full flex-shrink-0 flex items-center justify-center bg-black/40 overflow-hidden"
-                  style={{ width: `${100 / track.length}%` }}
+                  className="relative h-full overflow-hidden"
+                  style={{ 
+                    flex: `0 0 ${100 / track.length}%`,
+                    width: `${100 / track.length}%`,
+                    maxWidth: `${100 / track.length}%`
+                  }}
                 >
-                  {/* Subtle soft backdrop blur inside frame */}
-                  <div 
-                    className="absolute inset-0 bg-cover bg-center filter blur-lg opacity-40 scale-110 pointer-events-none"
-                    style={{ backgroundImage: `url('${slide.url}')` }}
-                  />
-                  {/* Tack-sharp 100% full uncropped, unzoomed image */}
                   <img
                     src={slide.url}
                     alt={slide.caption || 'Peace at Peak Resort'}
-                    className="relative z-10 w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                     style={{
                       imageRendering: 'high-quality',
-                      filter: 'contrast(1.06) brightness(0.98) saturate(1.12)',
+                      filter: 'contrast(1.06) brightness(0.98) saturate(1.1)',
                     }}
                   />
                 </div>
               ))}
             </div>
-
-            {/* Slide Caption Pill (bottom-left) */}
-            {activeSlide && (
-              <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-[0.62rem] text-white/95 font-medium tracking-wide border border-white/15 truncate max-w-[70%]">
-                {activeSlide.caption || 'Peace at Peak Resort'}
-              </div>
-            )}
-
-            {/* Slide Index Counter (bottom-right) */}
-            {slides.length > 1 && (
-              <div className="absolute bottom-2 right-2 z-20 px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-[0.6rem] text-accent-gold font-mono font-bold tracking-wider border border-white/15">
-                {((currentIndex - 1 + slides.length) % slides.length) + 1} / {slides.length}
-              </div>
-            )}
           </div>
+
+          {/* Minimalist Luxury Pagination Dots (Below Image) */}
+          {slides.length > 1 && (
+            <div className="flex items-center justify-center gap-1.5 mt-2.5">
+              {slides.map((_, i) => (
+                <span
+                  key={i}
+                  className="h-1 rounded-full transition-all duration-300"
+                  style={{
+                    width: i === activeIndex ? '20px' : '6px',
+                    backgroundColor: i === activeIndex ? '#f3d375' : 'rgba(255, 255, 255, 0.35)',
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* -------------------------------------------------------------
-            ZONE C: ACTION BUTTONS BELOW THE IMAGE
+            ZONE C: ACTION BUTTONS BELOW THE IMAGE (High Visibility & Perfect Spacing)
            ------------------------------------------------------------- */}
-        <div className="relative z-10 flex flex-col gap-2.5 w-full max-w-sm mx-auto pt-1">
+        <div className="hero-mobile-actions">
           <button 
+            type="button"
             onClick={onBookClick}
-            className="w-full btn btn-primary py-3.5 text-xs uppercase tracking-widest font-semibold shadow-xl active:scale-95"
-            style={{ borderRadius: '4px' }}
+            className="hero-mobile-btn-primary"
+            style={{ marginBottom: '0.75rem' }}
           >
-            Check Availability
+            <Calendar size={15} /> CHECK AVAILABILITY
           </button>
           
           <button 
+            type="button"
             onClick={onExploreClick}
-            className="w-full btn btn-secondary py-3.5 text-xs uppercase tracking-widest font-semibold border border-white/25 active:scale-95"
-            style={{ borderRadius: '4px' }}
+            className="hero-mobile-btn-secondary"
           >
-            Explore Cottages
+            EXPLORE COTTAGES
           </button>
         </div>
 
