@@ -387,16 +387,22 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!isFirebaseConfigured()) return;
 
-    // Seed default rooms to Firestore if newly created database
-    seedInitialRoomsIfEmpty(DEFAULT_ROOMS);
+    // Seed rooms to Firestore if newly created database
+    seedInitialRoomsIfEmpty(rooms);
 
-    // 1. Rooms Live Subscription
+    // 1. Rooms Live Subscription - Syncs changes without resurrecting deleted photos
     const unsubRooms = subscribeToRooms((cloudRooms) => {
       if (Array.isArray(cloudRooms) && cloudRooms.length > 0) {
         setRooms(prev => {
-          return DEFAULT_ROOMS.map(defRoom => {
-            const match = cloudRooms.find(cr => cr.id === defRoom.id);
-            return match ? { ...defRoom, ...match } : defRoom;
+          return prev.map(currentRoom => {
+            const match = cloudRooms.find(cr => cr.id === currentRoom.id);
+            if (!match) return currentRoom;
+            return {
+              ...currentRoom,
+              ...match,
+              images: Array.isArray(match.images) ? match.images : currentRoom.images,
+              image: match.image || (Array.isArray(match.images) && match.images[0]) || currentRoom.image
+            };
           });
         });
       }
@@ -481,7 +487,9 @@ export function AppProvider({ children }) {
     setRooms(prev => {
       const next = prev.map(room => (room.id === roomId ? { ...room, ...updates } : room));
       const target = next.find(r => r.id === roomId);
-      if (target) syncRoomToFirestore(roomId, target);
+      if (target) {
+        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
+      }
       return next;
     });
   };
@@ -501,7 +509,60 @@ export function AppProvider({ children }) {
         return room;
       });
       const target = next.find(r => r.id === roomId);
-      if (target) syncRoomToFirestore(roomId, target);
+      if (target) {
+        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
+      }
+      return next;
+    });
+  };
+
+  const replaceRoomImage = (roomId, imageIndex, newImageUrl) => {
+    if (!newImageUrl) return;
+    setRooms(prev => {
+      const next = prev.map(room => {
+        if (room.id === roomId && Array.isArray(room.images)) {
+          const updatedImages = [...room.images];
+          const oldPrimary = room.image;
+          const wasCover = oldPrimary === updatedImages[imageIndex] || imageIndex === 0;
+          updatedImages[imageIndex] = newImageUrl;
+          return {
+            ...room,
+            images: updatedImages,
+            image: wasCover ? newImageUrl : (room.image || newImageUrl)
+          };
+        }
+        return room;
+      });
+      const target = next.find(r => r.id === roomId);
+      if (target) {
+        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
+      }
+      return next;
+    });
+  };
+
+  const reorderRoomImages = (roomId, fromIndex, toIndex) => {
+    setRooms(prev => {
+      const next = prev.map(room => {
+        if (room.id === roomId && Array.isArray(room.images)) {
+          if (fromIndex < 0 || fromIndex >= room.images.length || toIndex < 0 || toIndex >= room.images.length) {
+            return room;
+          }
+          const updatedImages = [...room.images];
+          const [movedItem] = updatedImages.splice(fromIndex, 1);
+          updatedImages.splice(toIndex, 0, movedItem);
+          return {
+            ...room,
+            images: updatedImages,
+            image: updatedImages[0] || room.image || ''
+          };
+        }
+        return room;
+      });
+      const target = next.find(r => r.id === roomId);
+      if (target) {
+        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
+      }
       return next;
     });
   };
@@ -509,18 +570,25 @@ export function AppProvider({ children }) {
   const removeRoomImage = (roomId, imageIndex) => {
     setRooms(prev => {
       const next = prev.map(room => {
-        if (room.id === roomId && room.images) {
+        if (room.id === roomId && Array.isArray(room.images)) {
+          const removedUrl = room.images[imageIndex];
           const newImages = room.images.filter((_, idx) => idx !== imageIndex);
+          let newCover = room.image;
+          if (room.image === removedUrl || !newImages.includes(room.image)) {
+            newCover = newImages.length > 0 ? newImages[0] : '';
+          }
           return {
             ...room,
             images: newImages,
-            image: newImages.length > 0 ? newImages[0] : ''
+            image: newCover
           };
         }
         return room;
       });
       const target = next.find(r => r.id === roomId);
-      if (target) syncRoomToFirestore(roomId, target);
+      if (target) {
+        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
+      }
       return next;
     });
   };
@@ -540,7 +608,9 @@ export function AppProvider({ children }) {
         return room;
       });
       const target = next.find(r => r.id === roomId);
-      if (target) syncRoomToFirestore(roomId, target);
+      if (target) {
+        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
+      }
       return next;
     });
   };
@@ -550,7 +620,9 @@ export function AppProvider({ children }) {
     setPropertySpaces(prev => {
       const next = prev.map(space => (space.id === spaceId ? { ...space, ...updates } : space));
       const target = next.find(s => s.id === spaceId);
-      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      if (target) {
+        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
+      }
       return next;
     });
   };
@@ -570,7 +642,59 @@ export function AppProvider({ children }) {
         return space;
       });
       const target = next.find(s => s.id === spaceId);
-      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      if (target) {
+        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
+      }
+      return next;
+    });
+  };
+
+  const replaceSpaceImage = (spaceId, imageIndex, newImageUrl) => {
+    if (!newImageUrl) return;
+    setPropertySpaces(prev => {
+      const next = prev.map(space => {
+        if (space.id === spaceId && Array.isArray(space.images)) {
+          const updatedImages = [...space.images];
+          const wasCover = space.image === updatedImages[imageIndex] || imageIndex === 0;
+          updatedImages[imageIndex] = newImageUrl;
+          return {
+            ...space,
+            images: updatedImages,
+            image: wasCover ? newImageUrl : (space.image || newImageUrl)
+          };
+        }
+        return space;
+      });
+      const target = next.find(s => s.id === spaceId);
+      if (target) {
+        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
+      }
+      return next;
+    });
+  };
+
+  const reorderSpaceImages = (spaceId, fromIndex, toIndex) => {
+    setPropertySpaces(prev => {
+      const next = prev.map(space => {
+        if (space.id === spaceId && Array.isArray(space.images)) {
+          if (fromIndex < 0 || fromIndex >= space.images.length || toIndex < 0 || toIndex >= space.images.length) {
+            return space;
+          }
+          const updatedImages = [...space.images];
+          const [movedItem] = updatedImages.splice(fromIndex, 1);
+          updatedImages.splice(toIndex, 0, movedItem);
+          return {
+            ...space,
+            images: updatedImages,
+            image: updatedImages[0] || space.image || ''
+          };
+        }
+        return space;
+      });
+      const target = next.find(s => s.id === spaceId);
+      if (target) {
+        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
+      }
       return next;
     });
   };
@@ -579,17 +703,24 @@ export function AppProvider({ children }) {
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && space.images) {
+          const removedUrl = space.images[imageIndex];
           const newImages = space.images.filter((_, idx) => idx !== imageIndex);
+          let newCover = space.image;
+          if (space.image === removedUrl || !newImages.includes(space.image)) {
+            newCover = newImages.length > 0 ? newImages[0] : '';
+          }
           return {
             ...space,
             images: newImages,
-            image: newImages.length > 0 ? newImages[0] : ''
+            image: newCover
           };
         }
         return space;
       });
       const target = next.find(s => s.id === spaceId);
-      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      if (target) {
+        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
+      }
       return next;
     });
   };
@@ -609,7 +740,9 @@ export function AppProvider({ children }) {
         return space;
       });
       const target = next.find(s => s.id === spaceId);
-      if (target) syncPropertySpaceToFirestore(spaceId, target);
+      if (target) {
+        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
+      }
       return next;
     });
   };
@@ -798,6 +931,8 @@ export function AppProvider({ children }) {
         setRooms,
         updateRoom,
         addRoomImage,
+        replaceRoomImage,
+        reorderRoomImages,
         removeRoomImage,
         setRoomPrimaryImage,
         getEffectivePrice,
@@ -806,6 +941,8 @@ export function AppProvider({ children }) {
         setPropertySpaces,
         updatePropertySpace,
         addSpaceImage,
+        replaceSpaceImage,
+        reorderSpaceImages,
         removeSpaceImage,
         setSpacePrimaryImage,
         heroSlides,

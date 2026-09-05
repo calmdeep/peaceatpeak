@@ -54,6 +54,8 @@ export default function AdminDashboard({ onBackToSite }) {
     rooms, 
     updateRoom, 
     addRoomImage, 
+    replaceRoomImage,
+    reorderRoomImages,
     removeRoomImage, 
     setRoomPrimaryImage,
     getEffectivePrice,
@@ -61,6 +63,8 @@ export default function AdminDashboard({ onBackToSite }) {
     propertySpaces,
     updatePropertySpace,
     addSpaceImage,
+    replaceSpaceImage,
+    reorderSpaceImages,
     removeSpaceImage,
     setSpacePrimaryImage,
     heroSlides, 
@@ -253,12 +257,40 @@ export default function AdminDashboard({ onBackToSite }) {
     showToast(`✅ Availability updated: ${selectedRoom.name} is now ${newStatus ? 'AVAILABLE' : 'SOLD OUT'}!`);
   };
 
-  // 4. Remove a Room Image
+  // 4. Remove a Room Image (Instant & Real-Time)
   const handleRemoveImage = (index) => {
     if (!selectedRoom) return;
-    if (window.confirm('Are you sure you want to remove this photo from the room gallery?')) {
-      removeRoomImage(selectedRoom.id, index);
-      showToast('🗑️ Photo removed from room gallery!');
+    if (selectedRoom.images && selectedRoom.images.length <= 1) {
+      showToast('⚠️ At least one photo must remain in the room gallery.');
+      return;
+    }
+    removeRoomImage(selectedRoom.id, index);
+    showToast(`🗑️ Photo removed from ${selectedRoom.name}! Live website synchronized.`);
+  };
+
+  // Replace a specific Room Image in-place
+  const handleReplaceRoomImage = async (index, e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedRoom) return;
+    try {
+      showToast('⚡ Optimizing and updating photo in real-time...');
+      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      replaceRoomImage(selectedRoom.id, index, optimizedLocalUrl);
+      showToast(`✅ Photo #${index + 1} updated in real-time!`);
+      e.target.value = '';
+
+      if (isFirebaseConfigured()) {
+        uploadResortImageToStorage(file, 'rooms')
+          .then(cloudUrl => {
+            if (cloudUrl) {
+              replaceRoomImage(selectedRoom.id, index, cloudUrl);
+            }
+          })
+          .catch(err => console.warn('Cloud storage sync (local copy active):', err));
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('❌ ' + (err.message || 'Failed to replace photo.'));
     }
   };
 
@@ -287,9 +319,37 @@ export default function AdminDashboard({ onBackToSite }) {
   // 6. Remove a Space Image (Dining Hall / Reception)
   const handleRemoveSpaceImage = (index) => {
     if (!selectedSpace) return;
-    if (window.confirm(`Are you sure you want to remove this photo from ${selectedSpace.name}?`)) {
-      removeSpaceImage(selectedSpace.id, index);
-      showToast(`🗑️ Photo removed from ${selectedSpace.name} gallery!`);
+    if (selectedSpace.images && selectedSpace.images.length <= 1) {
+      showToast(`⚠️ At least one photo must remain in ${selectedSpace.name}.`);
+      return;
+    }
+    removeSpaceImage(selectedSpace.id, index);
+    showToast(`🗑️ Photo removed from ${selectedSpace.name} gallery!`);
+  };
+
+  // Replace a specific Space Image in-place
+  const handleReplaceSpaceImage = async (index, e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedSpace) return;
+    try {
+      showToast('⚡ Optimizing and updating photo in real-time...');
+      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+      replaceSpaceImage(selectedSpace.id, index, optimizedLocalUrl);
+      showToast(`✅ Photo #${index + 1} updated for ${selectedSpace.name}!`);
+      e.target.value = '';
+
+      if (isFirebaseConfigured()) {
+        uploadResortImageToStorage(file, 'spaces')
+          .then(cloudUrl => {
+            if (cloudUrl) {
+              replaceSpaceImage(selectedSpace.id, index, cloudUrl);
+            }
+          })
+          .catch(err => console.warn('Cloud storage sync (local copy active):', err));
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('❌ ' + (err.message || 'Failed to replace photo.'));
     }
   };
 
@@ -435,17 +495,41 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingRoom(true);
     setRoomUploadError('');
     try {
-      let finalUrl;
-      if (isFirebaseConfigured()) {
-        showToast('☁️ Uploading photo to Google Firebase Cloud Storage...');
-        finalUrl = await uploadResortImageToStorage(file, 'rooms');
-        showToast(`✅ Cloud Upload Success: Photo saved to Firebase Storage!`);
-      } else {
-        finalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
-        showToast('✅ Photo saved locally (Connect Firebase in .env for Cloud Storage)');
-      }
-      addRoomImage(selectedRoom.id, finalUrl);
+      // 1. Instant client-side canvas compression (< 100ms)
+      showToast('⚡ Optimizing photo locally in high definition...');
+      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+
+      // 2. Real-time optimistic update: immediately display in gallery
+      addRoomImage(selectedRoom.id, optimizedLocalUrl);
+      showToast(`📸 Photo added to ${selectedRoom.name}! Live website synchronized.`);
       e.target.value = '';
+
+      // 3. Asynchronous background upload to Firebase Storage if active
+      if (isFirebaseConfigured()) {
+        uploadResortImageToStorage(file, 'rooms')
+          .then(cloudUrl => {
+            if (cloudUrl) {
+              setRooms(prev => prev.map(room => {
+                if (room.id === selectedRoom.id && Array.isArray(room.images)) {
+                  const updatedImages = room.images.map(img => img === optimizedLocalUrl ? cloudUrl : img);
+                  return {
+                    ...room,
+                    images: updatedImages,
+                    image: room.image === optimizedLocalUrl ? cloudUrl : room.image
+                  };
+                }
+                return room;
+              }));
+              syncRoomToFirestore(selectedRoom.id, {
+                ...selectedRoom,
+                images: (selectedRoom.images || []).map(img => img === optimizedLocalUrl ? cloudUrl : img)
+              }).catch(console.warn);
+            }
+          })
+          .catch(storageErr => {
+            console.warn('Background Firebase storage note (local optimized copy retained):', storageErr);
+          });
+      }
     } catch (err) {
       console.error(err);
       setRoomUploadError(err.message || 'Failed to upload photo.');
@@ -470,17 +554,41 @@ export default function AdminDashboard({ onBackToSite }) {
     setIsUploadingSpace(true);
     setSpaceUploadError('');
     try {
-      let finalUrl;
-      if (isFirebaseConfigured()) {
-        showToast(`☁️ Uploading photo to Firebase Storage for ${selectedSpace.name}...`);
-        finalUrl = await uploadResortImageToStorage(file, 'spaces');
-        showToast(`✅ Uploaded to Google Firebase Cloud Storage for ${selectedSpace.name}!`);
-      } else {
-        finalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
-        showToast(`✅ Photo saved locally for ${selectedSpace.name}!`);
-      }
-      addSpaceImage(selectedSpace.id, finalUrl);
+      // 1. Instant client-side canvas compression
+      showToast(`⚡ Optimizing photo for ${selectedSpace.name}...`);
+      const optimizedLocalUrl = await optimizeImageFile(file, 1600, 1000, 0.88);
+
+      // 2. Real-time optimistic update
+      addSpaceImage(selectedSpace.id, optimizedLocalUrl);
+      showToast(`📸 Photo added to ${selectedSpace.name}! Live website synchronized.`);
       e.target.value = '';
+
+      // 3. Background Cloud Storage sync
+      if (isFirebaseConfigured()) {
+        uploadResortImageToStorage(file, 'spaces')
+          .then(cloudUrl => {
+            if (cloudUrl) {
+              setPropertySpaces(prev => prev.map(space => {
+                if (space.id === selectedSpace.id && Array.isArray(space.images)) {
+                  const updatedImages = space.images.map(img => img === optimizedLocalUrl ? cloudUrl : img);
+                  return {
+                    ...space,
+                    images: updatedImages,
+                    image: space.image === optimizedLocalUrl ? cloudUrl : space.image
+                  };
+                }
+                return space;
+              }));
+              syncPropertySpaceToFirestore(selectedSpace.id, {
+                ...selectedSpace,
+                images: (selectedSpace.images || []).map(img => img === optimizedLocalUrl ? cloudUrl : img)
+              }).catch(console.warn);
+            }
+          })
+          .catch(storageErr => {
+            console.warn('Background space storage note (local optimized copy retained):', storageErr);
+          });
+      }
     } catch (err) {
       console.error(err);
       setSpaceUploadError(err.message || 'Failed to upload space photo.');
@@ -1886,31 +1994,77 @@ export default function AdminDashboard({ onBackToSite }) {
                               </div>
 
                               {/* Visible Action Toolbar for each image */}
-                              <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
-                                {!isPrimary ? (
+                              <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex flex-col gap-2">
+                                {/* Top Row: Order Badge, Reordering & Cover Selection */}
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded text-[0.7rem]">
+                                      #{idx + 1}
+                                    </span>
+                                    {selectedRoom.images?.length > 1 && (
+                                      <div className="flex items-center">
+                                        <button
+                                          type="button"
+                                          disabled={idx === 0}
+                                          onClick={() => reorderRoomImages(selectedRoom.id, idx, idx - 1)}
+                                          className="p-1 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-200 rounded"
+                                          title="Move photo earlier in gallery"
+                                        >
+                                          <ChevronLeft size={13} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={idx === selectedRoom.images.length - 1}
+                                          onClick={() => reorderRoomImages(selectedRoom.id, idx, idx + 1)}
+                                          className="p-1 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-200 rounded"
+                                          title="Move photo later in gallery"
+                                        >
+                                          <ChevronRight size={13} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isPrimary ? (
+                                    <span className="text-[0.7rem] font-bold text-amber-800 uppercase bg-amber-50 border border-amber-200 px-2 py-0.5 rounded flex items-center gap-1">
+                                      <Star size={10} fill="currentColor" /> Main Cover
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRoomPrimaryImage(selectedRoom.id, idx)}
+                                      className="text-[0.68rem] font-bold text-amber-700 hover:text-amber-900 hover:bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300/80 uppercase transition-colors"
+                                      title="Make this the primary cover photo"
+                                    >
+                                      Set Cover
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Bottom Row: 1-Click Replace & Remove Buttons */}
+                                <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                                  <label
+                                    className="pms-btn pms-btn-secondary text-[0.7rem] font-bold uppercase tracking-wider py-1.5 px-2.5 flex-1 justify-center cursor-pointer"
+                                    title="Change or replace this photo with a new image"
+                                  >
+                                    <RefreshCw size={12} className="text-blue-600 shrink-0" /> Replace
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleReplaceRoomImage(idx, e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+
                                   <button
                                     type="button"
-                                    onClick={() => setRoomPrimaryImage(selectedRoom.id, idx)}
-                                    className="pms-btn pms-btn-secondary text-xs font-bold uppercase tracking-wider py-2 px-3 flex-grow justify-center"
-                                    title="Make this the primary cover photo"
+                                    onClick={() => handleRemoveImage(idx)}
+                                    className="pms-btn pms-btn-danger text-[0.7rem] font-bold uppercase tracking-wider py-1.5 px-2.5 shrink-0"
+                                    title="Remove this photo from room gallery"
                                   >
-                                    <Star size={13} className="text-amber-600" /> Set Cover
+                                    <Trash2 size={12} /> Remove
                                   </button>
-                                ) : (
-                                  <span className="text-xs font-bold text-amber-800 uppercase px-2 py-2">
-                                    ★ Main Cover
-                                  </span>
-                                )}
-
-                                {/* Facility to Remove Existing Image */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveImage(idx)}
-                                  className="pms-btn pms-btn-danger text-xs font-bold uppercase tracking-wider py-2 px-3 shrink-0"
-                                  title="Remove this photo from room gallery"
-                                >
-                                  <Trash2 size={13} /> Remove
-                                </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2137,31 +2291,78 @@ export default function AdminDashboard({ onBackToSite }) {
                                 </span>
                               </div>
 
-                              {/* Visible Toolbar with Remove Button */}
-                              <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
-                                {!isPrimary ? (
+                              {/* Visible Toolbar with Replace, Reorder & Remove Buttons */}
+                              <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex flex-col gap-2">
+                                {/* Top Row: Order Badge, Reordering & Cover Selection */}
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded text-[0.7rem]">
+                                      #{idx + 1}
+                                    </span>
+                                    {selectedSpace.images?.length > 1 && (
+                                      <div className="flex items-center">
+                                        <button
+                                          type="button"
+                                          disabled={idx === 0}
+                                          onClick={() => reorderSpaceImages(selectedSpace.id, idx, idx - 1)}
+                                          className="p-1 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-200 rounded"
+                                          title="Move photo earlier in gallery"
+                                        >
+                                          <ChevronLeft size={13} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={idx === selectedSpace.images.length - 1}
+                                          onClick={() => reorderSpaceImages(selectedSpace.id, idx, idx + 1)}
+                                          className="p-1 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-200 rounded"
+                                          title="Move photo later in gallery"
+                                        >
+                                          <ChevronRight size={13} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isPrimary ? (
+                                    <span className="text-[0.7rem] font-bold text-amber-800 uppercase bg-amber-50 border border-amber-200 px-2 py-0.5 rounded flex items-center gap-1">
+                                      <Star size={10} fill="currentColor" /> Main Display
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSpacePrimaryImage(selectedSpace.id, idx)}
+                                      className="text-[0.68rem] font-bold text-amber-700 hover:text-amber-900 hover:bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300/80 uppercase transition-colors"
+                                      title="Make this the primary space photo"
+                                    >
+                                      Set Main
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Bottom Row: 1-Click Replace & Remove Buttons */}
+                                <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                                  <label
+                                    className="pms-btn pms-btn-secondary text-[0.7rem] font-bold uppercase tracking-wider py-1.5 px-2.5 flex-1 justify-center cursor-pointer"
+                                    title="Change or replace this photo with a new image"
+                                  >
+                                    <RefreshCw size={12} className="text-blue-600 shrink-0" /> Replace
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleReplaceSpaceImage(idx, e)}
+                                      className="hidden"
+                                    />
+                                  </label>
+
                                   <button
                                     type="button"
-                                    onClick={() => setSpacePrimaryImage(selectedSpace.id, idx)}
-                                    className="pms-btn pms-btn-secondary text-xs font-bold uppercase tracking-wider py-2 px-3 flex-grow justify-center"
+                                    onClick={() => handleRemoveSpaceImage(idx)}
+                                    className="pms-btn pms-btn-danger text-[0.7rem] font-bold uppercase tracking-wider py-1.5 px-2.5 shrink-0"
+                                    title="Remove this photo"
                                   >
-                                    <Star size={13} className="text-amber-600" /> Set Main
+                                    <Trash2 size={12} /> Remove
                                   </button>
-                                ) : (
-                                  <span className="text-xs font-bold text-amber-800 uppercase px-2 py-2">
-                                    ★ Cover
-                                  </span>
-                                )}
-
-                                {/* Facility to Remove Existing Space Image */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveSpaceImage(idx)}
-                                  className="pms-btn pms-btn-danger text-xs font-bold uppercase tracking-wider py-2 px-3 shrink-0"
-                                  title="Remove this photo"
-                                >
-                                  <Trash2 size={13} /> Remove
-                                </button>
+                                </div>
                               </div>
                             </div>
                           );

@@ -60,8 +60,10 @@ export async function syncRoomToFirestore(roomId, roomData) {
   if (!isFirebaseConfigured() || !db) return false;
   try {
     const roomDoc = doc(db, 'rooms', roomId);
+    // Clean serialization to ensure no undefined values are sent to Firestore
+    const cleanData = JSON.parse(JSON.stringify(roomData));
     await setDoc(roomDoc, {
-      ...roomData,
+      ...cleanData,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     return true;

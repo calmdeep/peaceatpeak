@@ -8,15 +8,16 @@ function RoomImageSlider({ images, name }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const safeImages = images && images.length > 0 ? images : ['/images/hut1.webp'];
+  const activeIndex = currentIndex >= safeImages.length ? 0 : currentIndex;
 
   const handlePrev = (e) => {
     e.stopPropagation();
-    setCurrentIndex((prev) => (prev === 0 ? safeImages.length - 1 : prev - 1));
+    setCurrentIndex((prev) => (prev <= 0 ? safeImages.length - 1 : prev - 1));
   };
 
   const handleNext = (e) => {
     e.stopPropagation();
-    setCurrentIndex((prev) => (prev === safeImages.length - 1 ? 0 : prev + 1));
+    setCurrentIndex((prev) => (prev >= safeImages.length - 1 ? 0 : prev + 1));
   };
 
   return (
@@ -29,7 +30,7 @@ function RoomImageSlider({ images, name }) {
             src={img}
             alt={`${name} view ${idx + 1}`}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ease-in-out ${
-              idx === currentIndex ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              idx === activeIndex ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           />
         ))}
@@ -59,7 +60,7 @@ function RoomImageSlider({ images, name }) {
               <span
                 key={idx}
                 className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                  idx === currentIndex ? 'bg-accent-gold w-4' : 'bg-white/50'
+                  idx === activeIndex ? 'bg-accent-gold w-4' : 'bg-white/50'
                 }`}
               />
             ))}
