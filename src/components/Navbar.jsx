@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Compass, Calendar, Home, Bed } from 'lucide-react';
+import { Menu, X, Compass, Calendar, Home, Bed, Utensils } from 'lucide-react';
 
 export default function Navbar({ activeTab, setActiveTab }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,6 +20,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
   const navItems = [
     { id: 'home', label: 'THE SANCTUARY', icon: Home },
     { id: 'rooms', label: 'ACCOMMODATIONS', icon: Bed },
+    { id: 'dining', label: 'DINING & LOUNGE', icon: Utensils },
     { id: 'nearby', label: 'EXPLORE KANATAL', icon: Compass },
     { id: 'booking', label: 'RESERVATIONS', icon: Calendar },
   ];

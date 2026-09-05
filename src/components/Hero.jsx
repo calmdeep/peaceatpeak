@@ -1,25 +1,72 @@
-import React, { useState } from 'react';
-import { Calendar, Compass, ShieldCheck } from 'lucide-react';
-import { ROOMS_DATA } from './Rooms';
+import React, { useState, useEffect } from 'react';
+import { Calendar, ShieldCheck } from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
 
 export default function Hero({ onBookClick, onExploreClick }) {
+  const { heroSlides, rooms } = useAppContext();
+  const slides = heroSlides && heroSlides.length > 0 ? heroSlides : [];
+  const track = slides.length > 1 ? [slides[slides.length - 1], ...slides, slides[0]] : slides;
+
+  const [currentIndex, setCurrentIndex] = useState(1); // Starts at slides[0] (index 1 in track)
+  const [isTransitioning, setIsTransitioning] = useState(true);
   const today = new Date().toISOString().split('T')[0];
-  
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+
+    const timer = setInterval(() => {
+      setIsTransitioning(true);
+      setCurrentIndex((prev) => prev - 1); // Move left in track = images slide smoothly to the right
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
+  // When reaching the cloned boundary on the left (index 0), snap silently to index slides.length
+  const handleTransitionEnd = () => {
+    if (currentIndex === 0) {
+      setIsTransitioning(false);
+      setCurrentIndex(slides.length);
+    }
+  };
+
   return (
     <section className="relative h-screen flex items-center justify-center overflow-hidden">
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center transition-transform duration-10000 ease-out transform scale-105"
+      {/* Infinite Hardware-Accelerated Sliding Track (Smooth Rightward Slide) */}
+      <div
+        className="absolute inset-0 flex"
+        onTransitionEnd={handleTransitionEnd}
         style={{
-          backgroundImage: "url('/images/hero_background.jpg')",
+          width: `${track.length * 100}%`,
+          transform: `translate3d(-${(currentIndex * 100) / track.length}%, 0, 0)`,
+          transition: isTransitioning
+            ? 'transform 1000ms cubic-bezier(0.25, 1, 0.5, 1)'
+            : 'none',
+          willChange: 'transform',
         }}
-      />
+      >
+        {track.map((slide, idx) => (
+          <div
+            key={idx}
+            className="relative h-full flex-shrink-0"
+            style={{
+              width: `${100 / track.length}%`,
+              backgroundImage: `url('${slide.url}')`,
+              backgroundPosition: slide.position || 'center center',
+              backgroundSize: 'cover',
+              backgroundRepeat: 'no-repeat',
+              filter: 'contrast(1.08) brightness(0.95) saturate(1.12)',
+              imageRendering: '-webkit-optimize-contrast',
+            }}
+          />
+        ))}
+      </div>
       
       {/* Dark Ambient Overlay */}
-      <div className="gradient-overlay" />
+      <div className="gradient-overlay" style={{ zIndex: 2 }} />
 
       {/* Content */}
-      <div className="container relative z-10 text-center px-4 flex flex-col items-center pt-24">
+      <div className="container relative text-center px-4 flex flex-col items-center pt-24" style={{ zIndex: 10 }}>
         {/* Subtle Luxury Badge */}
         <div 
           className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full mb-6 glass-panel-dark text-accent-gold border border-border-gold text-[0.65rem] uppercase tracking-widest font-medium animate-fade"
@@ -103,8 +150,10 @@ export default function Hero({ onBookClick, onExploreClick }) {
                 className="w-full bg-transparent text-white border-0 border-b border-white/20 pb-1 pt-1 text-xs focus:border-accent-gold focus:ring-0 text-left font-medium select-none"
                 style={{ appearance: 'none', background: 'transparent' }}
               >
-                {ROOMS_DATA.map(r => (
-                  <option key={r.id} value={r.id} className="bg-bg-dark text-white text-xs">{r.name}</option>
+                {rooms.map(r => (
+                  <option key={r.id} value={r.id} className="bg-bg-dark text-white text-xs">
+                    {r.name} {r.available === false ? '(Sold Out)' : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -123,12 +172,12 @@ export default function Hero({ onBookClick, onExploreClick }) {
       </div>
 
       {/* Floating Indicators */}
-      <div className="absolute bottom-6 left-10 hidden xl:flex flex-col gap-1 text-[0.7rem] uppercase tracking-widest text-white/50 select-none">
+      <div className="absolute bottom-6 left-10 hidden xl:flex flex-col gap-1 text-[0.7rem] uppercase tracking-widest text-white/50 select-none" style={{ zIndex: 10 }}>
         <p>ELEVATION: <span className="text-accent-gold">8,500 FT</span></p>
         <p>LOCATION: <span className="text-white">KANATAL, IN</span></p>
       </div>
 
-      <div className="absolute bottom-6 right-10 hidden xl:flex flex-col gap-1 text-[0.7rem] uppercase tracking-widest text-white/50 text-right select-none">
+      <div className="absolute bottom-6 right-10 hidden xl:flex flex-col gap-1 text-[0.7rem] uppercase tracking-widest text-white/50 text-right select-none" style={{ zIndex: 10 }}>
         <p>HIMALAYAN VIEW: <span className="text-accent-gold">360° RANGE</span></p>
         <p>SERVICE: <span className="text-white">LUXURY COTTAGE</span></p>
       </div>

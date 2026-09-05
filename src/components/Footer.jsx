@@ -52,6 +52,9 @@ export default function Footer({ setActiveTab }) {
               <button onClick={() => handleLinkClick('rooms')} className="text-left hover:text-white transition-colors py-1">
                 Accommodations
               </button>
+              <button onClick={() => handleLinkClick('dining')} className="text-left hover:text-white transition-colors py-1">
+                Dining & Lounge
+              </button>
               <button onClick={() => handleLinkClick('nearby')} className="text-left hover:text-white transition-colors py-1">
                 Explore Kanatal
               </button>

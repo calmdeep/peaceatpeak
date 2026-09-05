@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Mail, Phone, User, CheckCircle2, ChevronRight, Calculator, ShieldCheck } from 'lucide-react';
-import { ROOMS_DATA } from './Rooms';
+import { Calendar, Users, Mail, Phone, User, CheckCircle2, ChevronRight, Calculator, ShieldCheck, XCircle } from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
 
 export default function BookingForm({ preselectedRoomId }) {
+  const { rooms, addBooking, getEffectivePrice, getRoomInventory } = useAppContext();
   const today = new Date().toISOString().split('T')[0];
   const tomorrowDate = new Date();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
@@ -11,18 +12,25 @@ export default function BookingForm({ preselectedRoomId }) {
   const [formData, setFormData] = useState({
     checkIn: today,
     checkOut: tomorrow,
-    roomId: preselectedRoomId || 'private_cottage',
+    roomId: preselectedRoomId || (rooms[0]?.id || 'private_cottage'),
     guests: '2',
     name: '',
     email: '',
     phone: '',
   });
 
+  const selectedRoom = rooms.find(r => r.id === formData.roomId) || rooms[0] || {};
+  const currentInv = getRoomInventory
+    ? getRoomInventory(formData.roomId, formData.checkIn, formData.checkOut)
+    : { totalUnits: 6, availableUnits: 6, occupiedUnits: 0 };
+  const isRoomAvailable = selectedRoom.available !== false && currentInv.availableUnits > 0;
+  const effectiveRate = getEffectivePrice ? getEffectivePrice(selectedRoom) : (selectedRoom.price || 4500);
+
   const [bookingSummary, setBookingSummary] = useState({
     nights: 1,
-    basePrice: 4500,
-    tax: 540,
-    total: 5040,
+    basePrice: effectiveRate,
+    tax: Math.round(effectiveRate * 0.12),
+    total: Math.round(effectiveRate * 1.12),
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -49,8 +57,8 @@ export default function BookingForm({ preselectedRoomId }) {
     const diffTime = Math.abs(checkOutDate - checkInDate);
     const diffNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    const selectedRoom = ROOMS_DATA.find(r => r.id === formData.roomId) || ROOMS_DATA[0];
-    const roomRate = selectedRoom.price;
+    const currentRoom = rooms.find(r => r.id === formData.roomId) || rooms[0] || {};
+    const roomRate = getEffectivePrice ? getEffectivePrice(currentRoom) : (currentRoom.price || 4500);
     const basePrice = roomRate * diffNights;
     const tax = Math.round(basePrice * 0.12);
     const total = basePrice + tax;
@@ -61,7 +69,7 @@ export default function BookingForm({ preselectedRoomId }) {
       tax,
       total,
     });
-  }, [formData.checkIn, formData.checkOut, formData.roomId]);
+  }, [formData.checkIn, formData.checkOut, formData.roomId, rooms, getEffectivePrice]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -78,10 +86,24 @@ export default function BookingForm({ preselectedRoomId }) {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const id = `PAP-${new Date().getFullYear()}-${randomNum}`;
     setBookingId(id);
+
+    if (addBooking) {
+      addBooking({
+        id,
+        guestName: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        roomId: formData.roomId,
+        roomName: selectedRoom.name,
+        checkIn: formData.checkIn,
+        checkOut: formData.checkOut,
+        nights: bookingSummary.nights,
+        amount: bookingSummary.total
+      });
+    }
+
     setIsSubmitted(true);
   };
-
-  const selectedRoom = ROOMS_DATA.find(r => r.id === formData.roomId) || ROOMS_DATA[0];
 
   if (isSubmitted) {
     return (
@@ -245,11 +267,18 @@ export default function BookingForm({ preselectedRoomId }) {
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 rounded-md border border-border-light focus:border-accent-gold bg-bg-light transition-all text-xs font-semibold"
                 >
-                  {ROOMS_DATA.map(room => (
-                    <option key={room.id} value={room.id}>
-                      {room.name}
-                    </option>
-                  ))}
+                  {rooms.map(room => {
+                    const inv = getRoomInventory
+                      ? getRoomInventory(room.id, formData.checkIn, formData.checkOut)
+                      : { totalUnits: 6, availableUnits: 6, occupiedUnits: 0 };
+                    const roomAvail = room.available !== false && inv.availableUnits > 0;
+                    const effPrice = getEffectivePrice ? getEffectivePrice(room) : (room.price || 4500);
+                    return (
+                      <option key={room.id} value={room.id} disabled={!roomAvail}>
+                        {room.name} {!roomAvail ? '— [SOLD OUT]' : `— ₹${effPrice.toLocaleString()}/night (${inv.availableUnits} of ${inv.totalUnits} Available)`}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -263,17 +292,29 @@ export default function BookingForm({ preselectedRoomId }) {
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 rounded-md border border-border-light focus:border-accent-gold bg-bg-light transition-all text-xs font-semibold"
                 >
-                  <option value="1">1 Person</option>
-                  <option value="2">2 People</option>
-                  <option value="3">3 People</option>
-                  <option value="4">4 People</option>
+                  <option value="1">1 Adult</option>
+                  <option value="2">2 Adults</option>
+                  <option value="3">3 Adults (Extra Bed)</option>
+                  <option value="4">4 Adults (Family Suite)</option>
                 </select>
               </div>
             </div>
 
-            {/* Credentials Info */}
-            <div className="space-y-4 pt-4 border-t border-border-light">
-              <h4 className="text-[0.65rem] uppercase tracking-widest text-text-dark-secondary font-bold">Lead Contact</h4>
+            {/* Inventory Real-Time Status Feedback */}
+            {isRoomAvailable && currentInv.occupiedUnits > 0 && (
+              <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                <span>
+                  <strong>High Demand:</strong> Only <strong>{currentInv.availableUnits} of {currentInv.totalUnits}</strong> {selectedRoom.unitLabel || 'cottages'} remaining for your selected dates ({formData.checkIn} to {formData.checkOut}).
+                </span>
+              </div>
+            )}
+
+            {/* Contact Details */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-[0.65rem] uppercase tracking-widest text-text-dark-primary font-bold border-b border-border-light pb-2">
+                Primary Contact Information
+              </h4>
 
               <div className="space-y-1.5">
                 <label className="text-[0.65rem] uppercase tracking-widest text-text-dark-primary font-bold">
@@ -323,12 +364,30 @@ export default function BookingForm({ preselectedRoomId }) {
               </div>
             </div>
 
+            {!isRoomAvailable && (
+              <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <XCircle size={16} className="shrink-0 text-red-500" />
+                <span>All {currentInv.totalUnits} {selectedRoom.unitLabel || 'units'} of this sanctuary are <strong>Sold Out</strong> for your dates ({formData.checkIn} to {formData.checkOut}). Please choose another stay above.</span>
+              </div>
+            )}
+
             <button
               type="submit"
-              className="btn btn-primary btn-block py-4 text-xs font-semibold uppercase tracking-widest"
+              disabled={!isRoomAvailable}
+              className={`btn btn-block py-4 text-xs font-semibold uppercase tracking-widest ${
+                isRoomAvailable
+                  ? 'btn-primary'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-200'
+              }`}
               style={{ borderRadius: '0px' }}
             >
-              Request Reservation <ChevronRight size={16} />
+              {isRoomAvailable ? (
+                <>
+                  Request Reservation <ChevronRight size={16} />
+                </>
+              ) : (
+                'Selected Sanctuary Is Sold Out'
+              )}
             </button>
           </form>
 
