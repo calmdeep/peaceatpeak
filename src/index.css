@@ -2467,76 +2467,100 @@ input, select, textarea, input::placeholder {
 
 /* ==========================================================================
    Hero Slideshow Engine (Desktop Cover & Mobile Full-Image High-Quality System)
+/* ==========================================================================
+   Hero Slideshow Engine (Desktop Cover & Mobile Above/Below Text System)
    ========================================================================== */
-.hero-slide-container {
-  position: relative !important;
-  height: 100% !important;
-  flex-shrink: 0 !important;
+.hero-desktop-wrapper {
+  position: absolute !important;
+  inset: 0 !important;
   overflow: hidden !important;
-  background-color: #050d09 !important;
+  pointer-events: none !important;
 }
 
-/* Desktop Screens (>= 768px): Cinematic Full-Bleed Cover */
+.hero-mobile-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-height: 100dvh !important;
+  padding-top: 5rem !important;
+  padding-bottom: 1.5rem !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  position: relative !important;
+  z-index: 10 !important;
+  box-sizing: border-box !important;
+}
+
+.hero-mobile-stage {
+  width: 100% !important;
+  max-width: 460px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  aspect-ratio: 16 / 10 !important;
+  position: relative !important;
+  border-radius: 0.85rem !important;
+  overflow: hidden !important;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background-color: #030805 !important;
+}
+
+.aspect-video,
+.aspect-\[16\/9\] {
+  aspect-ratio: 16 / 9 !important;
+}
+
+.aspect-\[16\/10\] {
+  aspect-ratio: 16 / 10 !important;
+}
+
 @media (min-width: 768px) {
-  .hero-slide-desktop-cover {
-    position: absolute !important;
-    inset: 0 !important;
-    background-size: cover !important;
-    background-repeat: no-repeat !important;
-    filter: contrast(1.08) brightness(0.95) saturate(1.12) !important;
-    image-rendering: -webkit-optimize-contrast !important;
-    image-rendering: high-quality !important;
+  .hero-desktop-wrapper {
+    display: block !important;
   }
-
-  .hero-slide-mobile-wrapper {
+  .hero-desktop-content {
+    display: flex !important;
+  }
+  .hero-mobile-wrapper {
     display: none !important;
+  }
+  .md\:hidden {
+    display: none !important;
+  }
+  .md\:flex {
+    display: flex !important;
+  }
+  .md\:block {
+    display: block !important;
+  }
+  .md\:text-7xl {
+    font-size: 4.5rem !important;
+    line-height: 1 !important;
+  }
+  .md\:text-xl {
+    font-size: 1.25rem !important;
+    line-height: 1.75rem !important;
   }
 }
 
-/* Mobile & Android Screens (< 768px): Show 100% Full Image with Zero Zoom + Ambient Glow */
 @media (max-width: 767px) {
-  .hero-slide-desktop-cover {
+  .hero-desktop-wrapper {
     display: none !important;
   }
-
-  .hero-slide-mobile-wrapper {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
+  .hero-desktop-content {
+    display: none !important;
+  }
+  .hero-mobile-wrapper {
     display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow: hidden !important;
   }
-
-  /* Ambient atmospheric glow fills vertical screen seamlessly with matching colors */
-  .hero-slide-ambient-blur {
-    position: absolute !important;
-    top: -24px !important;
-    bottom: -24px !important;
-    left: -24px !important;
-    right: -24px !important;
-    background-size: cover !important;
-    background-position: center center !important;
-    background-repeat: no-repeat !important;
-    filter: blur(32px) brightness(0.4) saturate(1.3) !important;
-    transform: scale(1.15) !important;
-    opacity: 0.95 !important;
-    z-index: 1 !important;
+  .md\:hidden {
+    display: flex !important;
   }
-
-  /* Full uncropped, unzoomed, tack-sharp hero photo */
-  .hero-slide-full-image {
-    position: relative !important;
-    width: 100% !important;
-    height: 100% !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-    background-position: center center !important;
-    filter: contrast(1.08) brightness(0.98) saturate(1.15) !important;
-    image-rendering: -webkit-optimize-contrast !important;
-    image-rendering: high-quality !important;
-    z-index: 2 !important;
+  .md\:flex {
+    display: none !important;
+  }
+  .md\:block {
+    display: none !important;
   }
 }
