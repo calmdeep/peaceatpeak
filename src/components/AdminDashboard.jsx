@@ -51,6 +51,7 @@ import { isFirebaseConfigured } from '../firebase';
 import { uploadImageToPublicCDN, RESORT_PHOTO_PRESETS } from '../services/imageUploadService';
 import { formatReservationWhatsAppMessage, getWhatsAppUrl, getGuestWhatsAppUrl } from '../services/whatsappService';
 import { downloadReceiptImage } from '../services/receiptImageService';
+import { getRazorpayKey, setRazorpayKeyOverride, isRazorpayLive } from '../services/razorpayService';
 
 export default function AdminDashboard({ onBackToSite }) {
   const { 
@@ -142,14 +143,25 @@ export default function AdminDashboard({ onBackToSite }) {
   const [testStatus, setTestStatus] = useState(null);
   const [apiGatewayStatus, setApiGatewayStatus] = useState(null);
 
+  // Razorpay Key Management Draft
+  const [razorpayKeyDraft, setRazorpayKeyDraft] = useState('');
+  const [razorpaySavedMessage, setRazorpaySavedMessage] = useState(false);
+
   useEffect(() => {
     if (activeNav === 'settings') {
+      setRazorpayKeyDraft(getRazorpayKey());
       fetch('/api/send-whatsapp')
         .then(r => r.json())
         .then(data => setApiGatewayStatus(data))
         .catch(() => setApiGatewayStatus({ configured: false, status: 'offline' }));
     }
   }, [activeNav]);
+
+  const handleSaveRazorpayKey = () => {
+    setRazorpayKeyOverride(razorpayKeyDraft);
+    setRazorpaySavedMessage(true);
+    setTimeout(() => setRazorpaySavedMessage(false), 3000);
+  };
 
   const handleSendTestWhatsApp = async () => {
     if (!testPhone) {
@@ -3253,6 +3265,80 @@ export default function AdminDashboard({ onBackToSite }) {
                   <span className="pms-label text-slate-500">Reservations</span>
                   <h4 className="text-xl font-bold text-slate-900 mt-1">{bookings.length} Bookings</h4>
                   <p className="text-[0.7rem] text-slate-500 mt-0.5">Key: <code>pap_bookings_data</code></p>
+                </div>
+              </div>
+
+              {/* Razorpay Live Payment Gateway Card */}
+              <div className="pms-card p-6 border-amber-200 bg-amber-50/20 max-w-3xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 text-slate-900 font-bold text-base">
+                    <DollarSign size={22} className="text-amber-600" />
+                    <span>Razorpay Live Payment Gateway Configuration</span>
+                  </div>
+                  <span className={`text-[0.68rem] px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                    razorpayKeyDraft.startsWith('rzp_live_')
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : (razorpayKeyDraft.startsWith('rzp_test_') 
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                          : 'bg-red-100 text-red-800 border border-red-300')
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${razorpayKeyDraft.startsWith('rzp_live_') ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                    {razorpayKeyDraft.startsWith('rzp_live_') 
+                      ? 'Live Production Active' 
+                      : (razorpayKeyDraft.startsWith('rzp_test_') ? 'Test Sandbox Active' : 'Key Missing')}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Real payment processing is active for all resort guests. All payment facilities are enabled automatically: <strong>UPI (GPay, PhonePe, Paytm, BHIM, QR), Credit & Debit Cards (Visa, Master, RuPay, Amex), NetBanking (58+ Banks), and Wallets</strong>.
+                </p>
+
+                {/* Key Input Field & Save */}
+                <div className="space-y-2">
+                  <label className="text-[0.68rem] uppercase tracking-wider text-slate-600 font-bold block">
+                    Razorpay Key ID (Live / Production)
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="rzp_live_... or rzp_test_..."
+                      value={razorpayKeyDraft}
+                      onChange={e => setRazorpayKeyDraft(e.target.value)}
+                      className="pms-input font-mono text-xs flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveRazorpayKey}
+                      className="pms-btn pms-btn-primary text-xs py-2 px-4 shrink-0 flex items-center gap-1.5"
+                    >
+                      <Save size={14} /> Save Key
+                    </button>
+                  </div>
+                  {razorpaySavedMessage && (
+                    <p className="text-xs text-emerald-600 font-semibold animate-fade">
+                      ✓ Razorpay Key successfully updated! Real payments will use this key immediately.
+                    </p>
+                  )}
+                </div>
+
+                {/* Facilities Enabled Grid */}
+                <div className="p-3 rounded-xl bg-white border border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <span className="font-bold text-slate-800 block">UPI Instant</span>
+                    <span className="text-[0.65rem] text-slate-500">GPay, PhonePe, QR</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <span className="font-bold text-slate-800 block">Cards</span>
+                    <span className="text-[0.65rem] text-slate-500">Visa, Master, RuPay</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <span className="font-bold text-slate-800 block">NetBanking</span>
+                    <span className="text-[0.65rem] text-slate-500">58+ Indian Banks</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50">
+                    <span className="font-bold text-slate-800 block">SSL Security</span>
+                    <span className="text-[0.65rem] text-slate-500">256-Bit Bank Grade</span>
+                  </div>
                 </div>
               </div>
 

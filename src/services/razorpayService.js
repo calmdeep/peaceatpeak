@@ -1,6 +1,7 @@
 /**
- * Peace at Peak - Razorpay Payment Service
- * Dynamically loads the official Razorpay JS SDK and triggers the secure checkout modal.
+ * Peace at Peak Resort - Real Razorpay Payment Gateway Service
+ * Dynamically loads the official Razorpay JS SDK and triggers the secure checkout modal
+ * supporting all facilities: UPI (Google Pay, PhonePe, Paytm, QR), Cards, NetBanking & Wallets.
  */
 
 export const loadRazorpayScript = () => {
@@ -21,11 +22,43 @@ export const loadRazorpayScript = () => {
   });
 };
 
-export const isPlaceholderRazorpayKey = () => {
-  const key = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
-  return key === 'rzp_test_1DP5mmOlF5G5ag' || key.includes('YOUR_KEY');
+/**
+ * Returns active Razorpay Key ID (checks localStorage override first, then environment variable)
+ */
+export const getRazorpayKey = () => {
+  if (typeof window !== 'undefined') {
+    const savedKey = localStorage.getItem('pap_razorpay_key');
+    if (savedKey && savedKey.trim().length > 5) {
+      return savedKey.trim();
+    }
+  }
+  return import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
 };
 
+/**
+ * Saves a new Razorpay Key ID into localStorage
+ */
+export const setRazorpayKeyOverride = (key) => {
+  if (typeof window !== 'undefined') {
+    if (key && key.trim()) {
+      localStorage.setItem('pap_razorpay_key', key.trim());
+    } else {
+      localStorage.removeItem('pap_razorpay_key');
+    }
+  }
+};
+
+/**
+ * Checks if current active key is in Live Production mode
+ */
+export const isRazorpayLive = () => {
+  const key = getRazorpayKey();
+  return key.startsWith('rzp_live_');
+};
+
+/**
+ * Launches the real official Razorpay secure checkout window with all facilities
+ */
 export const initiateRazorpayPayment = async ({
   amount, // in INR rupees
   bookingId,
@@ -41,15 +74,17 @@ export const initiateRazorpayPayment = async ({
     throw new Error('Razorpay SDK could not be loaded. Please check your internet connection.');
   }
 
-  // Use configured Key ID or test key
-  const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
+  const razorpayKey = getRazorpayKey();
+  if (!razorpayKey) {
+    throw new Error('Razorpay Key ID is not configured. Please add your Razorpay Live Key ID.');
+  }
 
   const options = {
     key: razorpayKey,
     amount: Math.round(Number(amount) * 100), // amount in paise
     currency: 'INR',
     name: 'Peace at Peak Resort',
-    description: `${roomName} - Reservation #${bookingId}`,
+    description: `${roomName || 'Sanctuary Stay'} - Reservation #${bookingId}`,
     image: '/images/hut1.webp',
     prefill: {
       name: guestName || '',
@@ -58,20 +93,18 @@ export const initiateRazorpayPayment = async ({
     },
     notes: {
       bookingId: bookingId,
-      resort: 'Peace at Peak, Kanatal, Uttarakhand, 8500 Ft'
+      roomName: roomName || 'Sanctuary Stay',
+      guestName: guestName || '',
+      guestContact: guestPhone || '',
+      resort: 'Peace at Peak, Kanatal, Uttarakhand - 8500 Ft'
     },
     theme: {
-      color: '#0f172a' // Luxury slate theme
-    },
-    handler: function (response) {
-      onSuccess?.({
-        paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
-        orderId: response.razorpay_order_id || null,
-        signature: response.razorpay_signature || null,
-        method: 'razorpay'
-      });
+      color: '#d97706', // Resort gold / amber theme
+      backdrop_color: 'rgba(15, 23, 42, 0.85)'
     },
     modal: {
+      confirm_close: true,
+      escape: true,
       ondismiss: function () {
         onDismiss?.();
       }
