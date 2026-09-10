@@ -32,7 +32,7 @@ export const getRazorpayKey = () => {
       return savedKey.trim();
     }
   }
-  return import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
+  return import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TaMsshe46w2KE9';
 };
 
 /**
@@ -57,6 +57,34 @@ export const isRazorpayLive = () => {
 };
 
 /**
+ * Creates an official Razorpay Order ID on the backend
+ */
+export const createRazorpayOrder = async ({ amount, bookingId, roomName }) => {
+  try {
+    const res = await fetch('/api/create-razorpay-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount,
+        currency: 'INR',
+        receipt: `rcpt_${bookingId || Date.now()}`,
+        notes: {
+          bookingId: bookingId || '',
+          roomName: roomName || 'Sanctuary Stay'
+        }
+      })
+    });
+    if (res.ok) {
+      const order = await res.json();
+      return order?.id ? order : null;
+    }
+  } catch (err) {
+    console.warn('Order API notice, proceeding with direct checkout:', err);
+  }
+  return null;
+};
+
+/**
  * Launches the real official Razorpay secure checkout window with all facilities
  */
 export const initiateRazorpayPayment = async ({
@@ -76,8 +104,11 @@ export const initiateRazorpayPayment = async ({
 
   const razorpayKey = getRazorpayKey();
   if (!razorpayKey) {
-    throw new Error('Razorpay Key ID is not configured. Please add your Razorpay Live Key ID.');
+    throw new Error('Razorpay Key ID is not configured. Please add your Razorpay Key ID.');
   }
+
+  // Attempt to generate backend Razorpay order
+  const orderData = await createRazorpayOrder({ amount, bookingId, roomName });
 
   const options = {
     key: razorpayKey,
@@ -86,6 +117,7 @@ export const initiateRazorpayPayment = async ({
     name: 'Peace at Peak Resort',
     description: `${roomName || 'Sanctuary Stay'} - Reservation #${bookingId}`,
     image: '/images/hut1.webp',
+    ...(orderData?.id ? { order_id: orderData.id } : {}),
     prefill: {
       name: guestName || '',
       email: guestEmail || '',
@@ -101,6 +133,14 @@ export const initiateRazorpayPayment = async ({
     theme: {
       color: '#d97706', // Resort gold / amber theme
       backdrop_color: 'rgba(15, 23, 42, 0.85)'
+    },
+    handler: function (response) {
+      onSuccess?.({
+        paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+        orderId: response.razorpay_order_id || orderData?.id || null,
+        signature: response.razorpay_signature || null,
+        method: 'razorpay'
+      });
     },
     modal: {
       confirm_close: true,

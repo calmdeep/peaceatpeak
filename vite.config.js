@@ -1,15 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Dev middleware to run /api/send-whatsapp during local development
+// Dev middleware to run serverless API functions during local development
 function apiMiddlewarePlugin() {
   return {
     name: 'api-serverless-middleware',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (req.url && req.url.startsWith('/api/send-whatsapp')) {
+        if (req.url && (req.url.startsWith('/api/send-whatsapp') || req.url.startsWith('/api/create-razorpay-order'))) {
           try {
-            const modulePath = './api/send-whatsapp.js';
+            const endpoint = req.url.split('?')[0].replace('/api/', '');
+            const modulePath = `./api/${endpoint}.js`;
             const { default: handler } = await import(modulePath);
             
             let body = {};
