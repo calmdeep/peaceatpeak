@@ -57,7 +57,7 @@ export default function BookingForm({ preselectedRoomId }) {
     phone: '',
   });
 
-  // Payment Options: 'full' (100% online) | 'advance' (50% online) | 'arrival' (pay at resort)
+  // Payment Options: 'full' (100% online) | 'advance' (50% online)
   const [paymentOption, setPaymentOption] = useState('full');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentResult, setPaymentResult] = useState(null);
@@ -89,7 +89,7 @@ export default function BookingForm({ preselectedRoomId }) {
 
   const payableNow = paymentOption === 'full' 
     ? bookingSummary.total 
-    : (paymentOption === 'advance' ? Math.round(bookingSummary.total / 2) : 0);
+    : Math.round(bookingSummary.total / 2);
   const balanceDue = bookingSummary.total - payableNow;
 
   // Automatically generate high-res receipt image and dispatch to customer WhatsApp upon confirmation
@@ -900,7 +900,7 @@ export default function BookingForm({ preselectedRoomId }) {
               </div>
             </div>
 
-            {/* Payment Options (Razorpay UPI / Cards vs Pay on Arrival) */}
+            {/* Payment Options (Razorpay UPI / Cards) */}
             <div className="space-y-3 pt-2">
               <label className="text-[0.65rem] uppercase tracking-widest text-text-dark-primary font-bold flex items-center justify-between">
                 <span>Select Payment Mode</span>
@@ -967,35 +967,6 @@ export default function BookingForm({ preselectedRoomId }) {
                     </p>
                   </div>
                 </label>
-
-                {/* Pay on Arrival / Offline UPI at Resort */}
-                <label 
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    paymentOption === 'arrival' 
-                      ? 'border-amber-500 bg-amber-50/50 shadow-xs' 
-                      : 'border-border-light hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="paymentOption"
-                    value="arrival"
-                    checked={paymentOption === 'arrival'}
-                    onChange={() => setPaymentOption('arrival')}
-                    className="mt-1"
-                  />
-                  <div className="flex-grow min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-xs text-primary-deep">
-                        Pay on Arrival (UPI / Cash at Front Desk)
-                      </span>
-                      <span className="text-[0.68rem] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">Pay Later</span>
-                    </div>
-                    <p className="text-[0.68rem] text-text-dark-secondary mt-0.5">
-                      Confirm your reservation now and pay total tariff directly upon arrival in Kanatal.
-                    </p>
-                  </div>
-                </label>
               </div>
             </div>
 
@@ -1019,15 +990,9 @@ export default function BookingForm({ preselectedRoomId }) {
               {isProcessingPayment ? (
                 'Opening Razorpay Secure Window...'
               ) : isRoomAvailable ? (
-                paymentOption === 'arrival' ? (
-                  <>
-                    Confirm Reservation (Pay on Arrival) <ChevronRight size={16} />
-                  </>
-                ) : (
-                  <>
-                    Pay ₹{payableNow.toLocaleString()} via Razorpay <ChevronRight size={16} />
-                  </>
-                )
+                <>
+                  Pay ₹{payableNow.toLocaleString()} via Razorpay <ChevronRight size={16} />
+                </>
               ) : (
                 'Selected Sanctuary Is Sold Out'
               )}
