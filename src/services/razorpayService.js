@@ -27,18 +27,18 @@ export const loadRazorpayScript = () => {
  */
 export const getRazorpayKey = () => {
   const envKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
-  if (envKey && envKey.trim().length > 5) {
+  if (envKey && envKey.trim().length > 5 && !envKey.includes('test_TaOSEVM4XdvO4g')) {
     return envKey.trim();
   }
 
   if (typeof window !== 'undefined') {
     const savedKey = localStorage.getItem('pap_razorpay_key');
-    if (savedKey && savedKey.trim().length > 5 && !savedKey.includes('TaMsshe46w2KE9')) {
+    if (savedKey && savedKey.trim().length > 5 && savedKey.startsWith('rzp_live_')) {
       return savedKey.trim();
     }
   }
 
-  return 'rzp_test_TaOSEVM4XdvO4g';
+  return 'rzp_live_TaPbirgba3TKbe';
 };
 
 /**
