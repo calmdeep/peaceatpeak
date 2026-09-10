@@ -548,344 +548,332 @@ export function AppProvider({ children }) {
 
   const updateRoom = async (roomId, updates) => {
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setRooms(prev => {
-      const next = prev.map(room => {
-        if (room.id === roomId) {
-          updatedTarget = { ...room, ...updates, updatedAt: now };
-          return updatedTarget;
-        }
-        return room;
-      });
-      return next;
-    });
+    const currentRoom = rooms.find(r => r.id === roomId);
+    if (!currentRoom) return { success: false, error: 'Room not found' };
 
-    if (updatedTarget) {
-      const ok = await syncRoomToFirestore(roomId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
+    const updatedTarget = {
+      ...currentRoom,
+      ...updates,
+      updatedAt: now
+    };
+
+    setRooms(prev => prev.map(room => room.id === roomId ? updatedTarget : room));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_rooms_data') || '[]');
+      const newSaved = saved.map(r => r.id === roomId ? updatedTarget : r);
+      localStorage.setItem('pap_rooms_data', JSON.stringify(newSaved));
+    } catch (e) {
+      console.warn('Storage save warning:', e);
     }
-    return { success: false, error: 'Room not found' };
+
+    const ok = await syncRoomToFirestore(roomId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: updatedTarget };
   };
 
   const addRoomImage = async (roomId, imageUrl) => {
     if (!imageUrl) return { success: false };
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setRooms(prev => {
-      const next = prev.map(room => {
-        if (room.id === roomId) {
-          const updatedImages = [...(room.images || []), imageUrl];
-          updatedTarget = {
-            ...room,
-            images: updatedImages,
-            image: room.image || imageUrl,
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return room;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncRoomToFirestore(roomId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false };
+    const currentRoom = rooms.find(r => r.id === roomId);
+    if (!currentRoom) return { success: false };
+
+    const updatedImages = [...(currentRoom.images || []), imageUrl];
+    const updatedTarget = {
+      ...currentRoom,
+      images: updatedImages,
+      image: currentRoom.image || imageUrl,
+      updatedAt: now
+    };
+
+    setRooms(prev => prev.map(r => r.id === roomId ? updatedTarget : r));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_rooms_data') || '[]');
+      const newSaved = saved.map(r => r.id === roomId ? updatedTarget : r);
+      localStorage.setItem('pap_rooms_data', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncRoomToFirestore(roomId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: updatedTarget };
   };
 
   const replaceRoomImage = async (roomId, imageIndex, newImageUrl) => {
     if (!newImageUrl) return { success: false };
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setRooms(prev => {
-      const next = prev.map(room => {
-        if (room.id === roomId && Array.isArray(room.images)) {
-          const updatedImages = [...room.images];
-          const oldPrimary = room.image;
-          const wasCover = oldPrimary === updatedImages[imageIndex] || imageIndex === 0;
-          updatedImages[imageIndex] = newImageUrl;
-          updatedTarget = {
-            ...room,
-            images: updatedImages,
-            image: wasCover ? newImageUrl : (room.image || newImageUrl),
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return room;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncRoomToFirestore(roomId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false };
+    const currentRoom = rooms.find(r => r.id === roomId);
+    if (!currentRoom || !Array.isArray(currentRoom.images)) return { success: false };
+
+    const updatedImages = [...currentRoom.images];
+    const oldPrimary = currentRoom.image;
+    const wasCover = oldPrimary === updatedImages[imageIndex] || imageIndex === 0;
+    updatedImages[imageIndex] = newImageUrl;
+    const updatedTarget = {
+      ...currentRoom,
+      images: updatedImages,
+      image: wasCover ? newImageUrl : (currentRoom.image || newImageUrl),
+      updatedAt: now
+    };
+
+    setRooms(prev => prev.map(r => r.id === roomId ? updatedTarget : r));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_rooms_data') || '[]');
+      const newSaved = saved.map(r => r.id === roomId ? updatedTarget : r);
+      localStorage.setItem('pap_rooms_data', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncRoomToFirestore(roomId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: updatedTarget };
   };
 
   const reorderRoomImages = async (roomId, fromIndex, toIndex) => {
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setRooms(prev => {
-      const next = prev.map(room => {
-        if (room.id === roomId && Array.isArray(room.images)) {
-          if (fromIndex < 0 || fromIndex >= room.images.length || toIndex < 0 || toIndex >= room.images.length) {
-            return room;
-          }
-          const updatedImages = [...room.images];
-          const [movedItem] = updatedImages.splice(fromIndex, 1);
-          updatedImages.splice(toIndex, 0, movedItem);
-          updatedTarget = {
-            ...room,
-            images: updatedImages,
-            image: updatedImages[0] || room.image || '',
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return room;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncRoomToFirestore(roomId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
+    const currentRoom = rooms.find(r => r.id === roomId);
+    if (!currentRoom || !Array.isArray(currentRoom.images)) return { success: false };
+    if (fromIndex < 0 || fromIndex >= currentRoom.images.length || toIndex < 0 || toIndex >= currentRoom.images.length) {
+      return { success: false };
     }
-    return { success: false };
+
+    const updatedImages = [...currentRoom.images];
+    const [movedItem] = updatedImages.splice(fromIndex, 1);
+    updatedImages.splice(toIndex, 0, movedItem);
+    const updatedTarget = {
+      ...currentRoom,
+      images: updatedImages,
+      image: updatedImages[0] || currentRoom.image || '',
+      updatedAt: now
+    };
+
+    setRooms(prev => prev.map(r => r.id === roomId ? updatedTarget : r));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_rooms_data') || '[]');
+      const newSaved = saved.map(r => r.id === roomId ? updatedTarget : r);
+      localStorage.setItem('pap_rooms_data', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncRoomToFirestore(roomId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: updatedTarget };
   };
 
   const removeRoomImage = async (roomId, imageIndex) => {
-    let updatedTarget = null;
-    setRooms(prev => {
-      const next = prev.map(room => {
-        if (room.id === roomId && Array.isArray(room.images)) {
-          const removedUrl = room.images[imageIndex];
-          const updatedImages = room.images.filter((_, idx) => idx !== imageIndex);
-          let newCover = room.image;
-          if (room.image === removedUrl || !updatedImages.includes(room.image)) {
-            newCover = updatedImages.length > 0 ? updatedImages[0] : '';
-          }
-          updatedTarget = {
-            ...room,
-            images: updatedImages,
-            image: newCover,
-            updatedAt: new Date().toISOString()
-          };
-          return updatedTarget;
-        }
-        return room;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncRoomToFirestore(roomId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
+    const now = new Date().toISOString();
+    const currentRoom = rooms.find(r => r.id === roomId);
+    if (!currentRoom || !Array.isArray(currentRoom.images)) return { success: false };
+
+    const removedUrl = currentRoom.images[imageIndex];
+    const updatedImages = currentRoom.images.filter((_, idx) => idx !== imageIndex);
+    let newCover = currentRoom.image;
+    if (currentRoom.image === removedUrl || !updatedImages.includes(currentRoom.image)) {
+      newCover = updatedImages.length > 0 ? updatedImages[0] : '';
     }
-    return { success: false };
+    const updatedTarget = {
+      ...currentRoom,
+      images: updatedImages,
+      image: newCover,
+      updatedAt: now
+    };
+
+    setRooms(prev => prev.map(r => r.id === roomId ? updatedTarget : r));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_rooms_data') || '[]');
+      const newSaved = saved.map(r => r.id === roomId ? updatedTarget : r);
+      localStorage.setItem('pap_rooms_data', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncRoomToFirestore(roomId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: updatedTarget };
   };
 
   const setRoomPrimaryImage = async (roomId, imageIndex) => {
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setRooms(prev => {
-      const next = prev.map(room => {
-        if (room.id === roomId && room.images && room.images[imageIndex]) {
-          const selectedImg = room.images[imageIndex];
-          const reordered = [selectedImg, ...room.images.filter((_, idx) => idx !== imageIndex)];
-          updatedTarget = {
-            ...room,
-            image: selectedImg,
-            images: reordered,
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return room;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncRoomToFirestore(roomId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false };
+    const currentRoom = rooms.find(r => r.id === roomId);
+    if (!currentRoom || !Array.isArray(currentRoom.images) || !currentRoom.images[imageIndex]) return { success: false };
+
+    const selectedImg = currentRoom.images[imageIndex];
+    const reordered = [selectedImg, ...currentRoom.images.filter((_, idx) => idx !== imageIndex)];
+    const updatedTarget = {
+      ...currentRoom,
+      image: selectedImg,
+      images: reordered,
+      updatedAt: now
+    };
+
+    setRooms(prev => prev.map(r => r.id === roomId ? updatedTarget : r));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_rooms_data') || '[]');
+      const newSaved = saved.map(r => r.id === roomId ? updatedTarget : r);
+      localStorage.setItem('pap_rooms_data', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncRoomToFirestore(roomId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: updatedTarget };
   };
 
   // Property Spaces Management (Dining Hall & Reception Lounge)
   const updatePropertySpace = async (spaceId, updates) => {
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setPropertySpaces(prev => {
-      const next = prev.map(space => {
-        if (space.id === spaceId) {
-          updatedTarget = { ...space, ...updates, updatedAt: now };
-          return updatedTarget;
-        }
-        return space;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false, error: 'Space not found' };
+    const currentSpace = (propertySpaces || []).find(s => s.id === spaceId);
+    if (!currentSpace) return { success: false, error: 'Space not found' };
+
+    const updatedTarget = {
+      ...currentSpace,
+      ...updates,
+      updatedAt: now
+    };
+
+    setPropertySpaces(prev => prev.map(space => space.id === spaceId ? updatedTarget : space));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_property_spaces') || '[]');
+      const newSaved = saved.map(s => s.id === spaceId ? updatedTarget : s);
+      localStorage.setItem('pap_property_spaces', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, space: updatedTarget };
   };
 
   const addSpaceImage = async (spaceId, imageUrl) => {
     if (!imageUrl) return { success: false };
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setPropertySpaces(prev => {
-      const next = prev.map(space => {
-        if (space.id === spaceId) {
-          const updatedImages = [...(space.images || []), imageUrl];
-          updatedTarget = {
-            ...space,
-            images: updatedImages,
-            image: space.image || imageUrl,
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return space;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false };
+    const currentSpace = (propertySpaces || []).find(s => s.id === spaceId);
+    if (!currentSpace) return { success: false };
+
+    const updatedImages = [...(currentSpace.images || []), imageUrl];
+    const updatedTarget = {
+      ...currentSpace,
+      images: updatedImages,
+      image: currentSpace.image || imageUrl,
+      updatedAt: now
+    };
+
+    setPropertySpaces(prev => prev.map(space => space.id === spaceId ? updatedTarget : space));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_property_spaces') || '[]');
+      const newSaved = saved.map(s => s.id === spaceId ? updatedTarget : s);
+      localStorage.setItem('pap_property_spaces', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, space: updatedTarget };
   };
 
   const replaceSpaceImage = async (spaceId, imageIndex, newImageUrl) => {
     if (!newImageUrl) return { success: false };
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setPropertySpaces(prev => {
-      const next = prev.map(space => {
-        if (space.id === spaceId && Array.isArray(space.images)) {
-          const updatedImages = [...space.images];
-          const wasCover = space.image === updatedImages[imageIndex] || imageIndex === 0;
-          updatedImages[imageIndex] = newImageUrl;
-          updatedTarget = {
-            ...space,
-            images: updatedImages,
-            image: wasCover ? newImageUrl : (space.image || newImageUrl),
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return space;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false };
+    const currentSpace = (propertySpaces || []).find(s => s.id === spaceId);
+    if (!currentSpace || !Array.isArray(currentSpace.images)) return { success: false };
+
+    const updatedImages = [...currentSpace.images];
+    const wasCover = currentSpace.image === updatedImages[imageIndex] || imageIndex === 0;
+    updatedImages[imageIndex] = newImageUrl;
+    const updatedTarget = {
+      ...currentSpace,
+      images: updatedImages,
+      image: wasCover ? newImageUrl : (currentSpace.image || newImageUrl),
+      updatedAt: now
+    };
+
+    setPropertySpaces(prev => prev.map(space => space.id === spaceId ? updatedTarget : space));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_property_spaces') || '[]');
+      const newSaved = saved.map(s => s.id === spaceId ? updatedTarget : s);
+      localStorage.setItem('pap_property_spaces', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, space: updatedTarget };
   };
 
   const reorderSpaceImages = async (spaceId, fromIndex, toIndex) => {
     const now = new Date().toISOString();
-    let updatedTarget = null;
-    setPropertySpaces(prev => {
-      const next = prev.map(space => {
-        if (space.id === spaceId && Array.isArray(space.images)) {
-          if (fromIndex < 0 || fromIndex >= space.images.length || toIndex < 0 || toIndex >= space.images.length) {
-            return space;
-          }
-          const updatedImages = [...space.images];
-          const [movedItem] = updatedImages.splice(fromIndex, 1);
-          updatedImages.splice(toIndex, 0, movedItem);
-          updatedTarget = {
-            ...space,
-            images: updatedImages,
-            image: updatedImages[0] || space.image || '',
-            updatedAt: now
-          };
-          return updatedTarget;
-        }
-        return space;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
+    const currentSpace = (propertySpaces || []).find(s => s.id === spaceId);
+    if (!currentSpace || !Array.isArray(currentSpace.images)) return { success: false };
+    if (fromIndex < 0 || fromIndex >= currentSpace.images.length || toIndex < 0 || toIndex >= currentSpace.images.length) {
+      return { success: false };
     }
-    return { success: false };
+
+    const updatedImages = [...currentSpace.images];
+    const [movedItem] = updatedImages.splice(fromIndex, 1);
+    updatedImages.splice(toIndex, 0, movedItem);
+    const updatedTarget = {
+      ...currentSpace,
+      images: updatedImages,
+      image: updatedImages[0] || currentSpace.image || '',
+      updatedAt: now
+    };
+
+    setPropertySpaces(prev => prev.map(space => space.id === spaceId ? updatedTarget : space));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_property_spaces') || '[]');
+      const newSaved = saved.map(s => s.id === spaceId ? updatedTarget : s);
+      localStorage.setItem('pap_property_spaces', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, space: updatedTarget };
   };
 
   const removeSpaceImage = async (spaceId, imageIndex) => {
-    let updatedTarget = null;
-    setPropertySpaces(prev => {
-      const next = prev.map(space => {
-        if (space.id === spaceId && space.images) {
-          const removedUrl = space.images[imageIndex];
-          const newImages = space.images.filter((_, idx) => idx !== imageIndex);
-          let newCover = space.image;
-          if (space.image === removedUrl || !newImages.includes(space.image)) {
-            newCover = newImages.length > 0 ? newImages[0] : '';
-          }
-          updatedTarget = {
-            ...space,
-            images: newImages,
-            image: newCover,
-            updatedAt: new Date().toISOString()
-          };
-          return updatedTarget;
-        }
-        return space;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
+    const now = new Date().toISOString();
+    const currentSpace = (propertySpaces || []).find(s => s.id === spaceId);
+    if (!currentSpace || !Array.isArray(currentSpace.images)) return { success: false };
+
+    const removedUrl = currentSpace.images[imageIndex];
+    const newImages = currentSpace.images.filter((_, idx) => idx !== imageIndex);
+    let newCover = currentSpace.image;
+    if (currentSpace.image === removedUrl || !newImages.includes(currentSpace.image)) {
+      newCover = newImages.length > 0 ? newImages[0] : '';
     }
-    return { success: false };
+    const updatedTarget = {
+      ...currentSpace,
+      images: newImages,
+      image: newCover,
+      updatedAt: now
+    };
+
+    setPropertySpaces(prev => prev.map(space => space.id === spaceId ? updatedTarget : space));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_property_spaces') || '[]');
+      const newSaved = saved.map(s => s.id === spaceId ? updatedTarget : s);
+      localStorage.setItem('pap_property_spaces', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, space: updatedTarget };
   };
 
   const setSpacePrimaryImage = async (spaceId, imageIndex) => {
-    let updatedTarget = null;
-    setPropertySpaces(prev => {
-      const next = prev.map(space => {
-        if (space.id === spaceId && space.images && space.images[imageIndex]) {
-          const selectedImg = space.images[imageIndex];
-          const reordered = [selectedImg, ...space.images.filter((_, idx) => idx !== imageIndex)];
-          updatedTarget = {
-            ...space,
-            image: selectedImg,
-            images: reordered,
-            updatedAt: new Date().toISOString()
-          };
-          return updatedTarget;
-        }
-        return space;
-      });
-      return next;
-    });
-    if (updatedTarget) {
-      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
-      if (ok) setLastCloudSync(new Date().toISOString());
-      return { success: ok };
-    }
-    return { success: false };
+    const now = new Date().toISOString();
+    const currentSpace = (propertySpaces || []).find(s => s.id === spaceId);
+    if (!currentSpace || !Array.isArray(currentSpace.images) || !currentSpace.images[imageIndex]) return { success: false };
+
+    const selectedImg = currentSpace.images[imageIndex];
+    const reordered = [selectedImg, ...currentSpace.images.filter((_, idx) => idx !== imageIndex)];
+    const updatedTarget = {
+      ...currentSpace,
+      image: selectedImg,
+      images: reordered,
+      updatedAt: now
+    };
+
+    setPropertySpaces(prev => prev.map(space => space.id === spaceId ? updatedTarget : space));
+    try {
+      const saved = JSON.parse(localStorage.getItem('pap_property_spaces') || '[]');
+      const newSaved = saved.map(s => s.id === spaceId ? updatedTarget : s);
+      localStorage.setItem('pap_property_spaces', JSON.stringify(newSaved));
+    } catch {}
+
+    const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, space: updatedTarget };
   };
 
   // Hero Slides Management

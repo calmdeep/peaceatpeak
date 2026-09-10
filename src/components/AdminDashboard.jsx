@@ -280,9 +280,13 @@ export default function AdminDashboard({ onBackToSite }) {
   const [isUploadingHero, setIsUploadingHero] = useState(false);
   const [heroUploadError, setHeroUploadError] = useState('');
 
-  // Sync room draft states when selected room changes
+  const lastSelectedTargetRef = useRef(null);
+  const lastSelectedSpaceRef = useRef(null);
+
+  // Sync room draft states ONLY when user selects a different target or upon initial load
   useEffect(() => {
-    if (selectedRoom) {
+    if (selectedRoom && lastSelectedTargetRef.current !== selectedTarget) {
+      lastSelectedTargetRef.current = selectedTarget;
       setPriceDraft(selectedRoom.price || 0);
       setDiscountDraft(selectedRoom.discount || 0);
       setOfferDraft(selectedRoom.offer || '');
@@ -304,9 +308,10 @@ export default function AdminDashboard({ onBackToSite }) {
     }
   }, [selectedTarget, selectedRoom]);
 
-  // Sync space draft states when selected space changes
+  // Sync space draft states ONLY when user selects a different space target or upon initial load
   useEffect(() => {
-    if (selectedSpace) {
+    if (selectedSpace && lastSelectedSpaceRef.current !== selectedTarget) {
+      lastSelectedSpaceRef.current = selectedTarget;
       setSpaceTitleDraft(selectedSpace.name || '');
       setSpaceSubtitleDraft(selectedSpace.subtitle || '');
       setSpaceTimingsDraft(selectedSpace.timings || '');
@@ -458,14 +463,18 @@ export default function AdminDashboard({ onBackToSite }) {
   };
 
   // 4. Remove a Room Image (Instant & Real-Time)
-  const handleRemoveImage = (index) => {
+  const handleRemoveImage = async (index) => {
     if (!selectedRoom) return;
     if (selectedRoom.images && selectedRoom.images.length <= 1) {
       showToast('⚠️ At least one photo must remain in the room gallery.');
       return;
     }
-    removeRoomImage(selectedRoom.id, index);
-    showToast(`🗑️ Photo removed from ${selectedRoom.name}! Live website synchronized.`);
+    const res = await removeRoomImage(selectedRoom.id, index);
+    if (res?.success) {
+      showToast(`🗑️ Photo removed from ${selectedRoom.name}! Live website synchronized.`);
+    } else {
+      showToast(`⚠️ Saved locally, cloud notice: ${res?.error || 'Offline'}`);
+    }
   };
 
   // Replace a specific Room Image in-place
@@ -475,14 +484,16 @@ export default function AdminDashboard({ onBackToSite }) {
     try {
       showToast('⚡ Updating photo with high-speed CDN...');
       const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
-      replaceRoomImage(selectedRoom.id, index, optimizedLocalUrl);
-      showToast(`✅ Photo #${index + 1} updated in real-time!`);
+      const res = await replaceRoomImage(selectedRoom.id, index, optimizedLocalUrl);
+      if (res?.success) {
+        showToast(`✅ Photo #${index + 1} updated in real-time & synced!`);
+      }
       e.target.value = '';
 
       uploadImageToPublicCDN(file)
-        .then(cdnUrl => {
+        .then(async cdnUrl => {
           if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
-            replaceRoomImage(selectedRoom.id, index, cdnUrl);
+            await replaceRoomImage(selectedRoom.id, index, cdnUrl);
           }
         })
         .catch(err => console.warn('Public CDN sync notice (local copy active):', err));
@@ -522,14 +533,18 @@ export default function AdminDashboard({ onBackToSite }) {
   };
 
   // 6. Remove a Space Image (Dining Hall / Reception)
-  const handleRemoveSpaceImage = (index) => {
+  const handleRemoveSpaceImage = async (index) => {
     if (!selectedSpace) return;
     if (selectedSpace.images && selectedSpace.images.length <= 1) {
       showToast(`⚠️ At least one photo must remain in ${selectedSpace.name}.`);
       return;
     }
-    removeSpaceImage(selectedSpace.id, index);
-    showToast(`🗑️ Photo removed from ${selectedSpace.name} gallery!`);
+    const res = await removeSpaceImage(selectedSpace.id, index);
+    if (res?.success) {
+      showToast(`🗑️ Photo removed from ${selectedSpace.name} gallery & synced!`);
+    } else {
+      showToast(`⚠️ Saved locally, cloud notice: ${res?.error || 'Offline'}`);
+    }
   };
 
   // Replace a specific Space Image in-place
@@ -539,14 +554,16 @@ export default function AdminDashboard({ onBackToSite }) {
     try {
       showToast('⚡ Updating photo with high-speed CDN...');
       const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
-      replaceSpaceImage(selectedSpace.id, index, optimizedLocalUrl);
-      showToast(`✅ Photo #${index + 1} updated for ${selectedSpace.name}!`);
+      const res = await replaceSpaceImage(selectedSpace.id, index, optimizedLocalUrl);
+      if (res?.success) {
+        showToast(`✅ Photo #${index + 1} updated & synced for ${selectedSpace.name}!`);
+      }
       e.target.value = '';
 
       uploadImageToPublicCDN(file)
-        .then(cdnUrl => {
+        .then(async cdnUrl => {
           if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
-            replaceSpaceImage(selectedSpace.id, index, cdnUrl);
+            await replaceSpaceImage(selectedSpace.id, index, cdnUrl);
           }
         })
         .catch(err => console.warn('Public CDN sync notice (local copy active):', err));
@@ -706,16 +723,22 @@ export default function AdminDashboard({ onBackToSite }) {
       showToast('⚡ Uploading photo to high-speed CDN...');
       const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
 
-      // 1. Real-time optimistic update: immediately display in gallery
-      addRoomImage(selectedRoom.id, optimizedLocalUrl);
-      showToast(`📸 Photo added to ${selectedRoom.name}! Synchronized live.`);
+      // 1. Real-time optimistic update: immediately display in gallery & sync to Cloud Firestore
+      const res = await addRoomImage(selectedRoom.id, optimizedLocalUrl);
+      if (res?.success) {
+        showToast(`📸 Photo added to ${selectedRoom.name}! Synced to Cloud.`);
+      } else {
+        showToast(`📸 Photo added locally to ${selectedRoom.name}.`);
+      }
       e.target.value = '';
 
       // 2. Upload to public CDN (ImgBB / FreeImage) for permanent public URL across devices
       uploadImageToPublicCDN(file)
-        .then(cdnUrl => {
+        .then(async cdnUrl => {
           if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
-            replaceRoomImage(selectedRoom.id, (selectedRoom.images?.length || 1), cdnUrl);
+            const currentRoom = rooms.find(r => r.id === selectedRoom.id);
+            const targetIdx = currentRoom?.images ? currentRoom.images.length - 1 : 0;
+            await replaceRoomImage(selectedRoom.id, targetIdx, cdnUrl);
           }
         })
         .catch(cdnErr => {
@@ -730,12 +753,17 @@ export default function AdminDashboard({ onBackToSite }) {
     }
   };
 
-  const handleAddRoomImageByUrl = (e) => {
+  const handleAddRoomImageByUrl = async (e) => {
     e.preventDefault();
     if (!newRoomImageUrl.trim() || !selectedRoom) return;
-    addRoomImage(selectedRoom.id, newRoomImageUrl.trim());
+    const urlToAdd = newRoomImageUrl.trim();
     setNewRoomImageUrl('');
-    showToast('✅ Image URL added to room gallery!');
+    const res = await addRoomImage(selectedRoom.id, urlToAdd);
+    if (res?.success) {
+      showToast('✅ Image URL added to room gallery & synced to Cloud!');
+    } else {
+      showToast('✅ Image URL added to room gallery!');
+    }
   };
 
   const handleSpaceFileUpload = async (e) => {
@@ -748,15 +776,21 @@ export default function AdminDashboard({ onBackToSite }) {
       showToast(`⚡ Uploading photo for ${selectedSpace.name} to high-speed CDN...`);
       const optimizedLocalUrl = await optimizeImageFile(file, 1200, 800, 0.78);
 
-      // Real-time optimistic update
-      addSpaceImage(selectedSpace.id, optimizedLocalUrl);
-      showToast(`📸 Photo added to ${selectedSpace.name}! Synchronized live.`);
+      // Real-time optimistic update & Firestore sync
+      const res = await addSpaceImage(selectedSpace.id, optimizedLocalUrl);
+      if (res?.success) {
+        showToast(`📸 Photo added to ${selectedSpace.name}! Synced to Cloud.`);
+      } else {
+        showToast(`📸 Photo added locally to ${selectedSpace.name}.`);
+      }
       e.target.value = '';
 
       uploadImageToPublicCDN(file)
-        .then(cdnUrl => {
+        .then(async cdnUrl => {
           if (cdnUrl && cdnUrl !== optimizedLocalUrl) {
-            replaceSpaceImage(selectedSpace.id, (selectedSpace.images?.length || 1), cdnUrl);
+            const currentSpace = (propertySpaces || []).find(s => s.id === selectedSpace.id);
+            const targetIdx = currentSpace?.images ? currentSpace.images.length - 1 : 0;
+            await replaceSpaceImage(selectedSpace.id, targetIdx, cdnUrl);
           }
         })
         .catch(cdnErr => {
@@ -771,20 +805,25 @@ export default function AdminDashboard({ onBackToSite }) {
     }
   };
 
-  const handleAddSpaceImageByUrl = (e) => {
+  const handleAddSpaceImageByUrl = async (e) => {
     e.preventDefault();
     if (!newSpaceImageUrl.trim() || !selectedSpace) return;
-    addSpaceImage(selectedSpace.id, newSpaceImageUrl.trim());
+    const urlToAdd = newSpaceImageUrl.trim();
     setNewSpaceImageUrl('');
-    showToast(`✅ Photo added to ${selectedSpace.name}!`);
+    const res = await addSpaceImage(selectedSpace.id, urlToAdd);
+    if (res?.success) {
+      showToast(`✅ Photo added to ${selectedSpace.name} & synced to Cloud!`);
+    } else {
+      showToast(`✅ Photo added to ${selectedSpace.name}!`);
+    }
   };
 
-  const handleSelectPresetPhoto = (presetUrl) => {
+  const handleSelectPresetPhoto = async (presetUrl) => {
     if (presetTargetType === 'space' && selectedSpace) {
-      addSpaceImage(selectedSpace.id, presetUrl);
+      await addSpaceImage(selectedSpace.id, presetUrl);
       showToast(`📸 Resort photo added to ${selectedSpace.name}! Synchronized across website.`);
     } else if (selectedRoom) {
-      addRoomImage(selectedRoom.id, presetUrl);
+      await addRoomImage(selectedRoom.id, presetUrl);
       showToast(`📸 Resort photo added to ${selectedRoom.name}! Synchronized across website.`);
     }
     setShowPresetModal(false);
