@@ -1,26 +1,62 @@
 /**
- * Peace at Peak Resort - Automated WhatsApp Receipt Dispatch API
- * Vercel Serverless Function (/api/send-whatsapp)
+ * Peace at Peak Resort - Automated WhatsApp Business Profile Dispatch API
+ * Vercel Serverless Function & Local Dev Handler (/api/send-whatsapp)
  * 
- * Automatically sends booking confirmation and receipt image to the customer's
- * WhatsApp phone number without requiring any manual clicks.
+ * Automatically dispatches reservation vouchers and payment confirmations directly
+ * from the resort company's WhatsApp Business profile to the customer's phone number.
  * 
- * Supports:
- * 1. UltraMsg (Instant QR scan from resort phone, sends image + caption)
- * 2. Meta WhatsApp Business Cloud API (Official Graph API)
- * 3. Twilio WhatsApp API
- * 4. Custom Webhook (Zapier / Make / Wati / Aisensy)
+ * Supported Providers:
+ * 1. Meta WhatsApp Business Cloud API (Official Meta Graph API - Cloud Token & Phone ID)
+ * 2. UltraMsg (Instant QR scan connecting the company's WhatsApp Business app on phone)
+ * 3. Wati / Aisensy (Leading WhatsApp Business API providers in India)
+ * 4. Twilio WhatsApp API
+ * 5. Custom Webhooks (Zapier, Make, n8n, Pabbly, or custom CRM)
  */
 
 export default async function handler(req, res) {
-  // Enable CORS
+  // Enable CORS headers for cross-origin or local requests
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // Health check & provider detection endpoint
+  if (req.method === 'GET') {
+    const metaConfigured = Boolean(
+      (process.env.WHATSAPP_CLOUD_TOKEN || process.env.VITE_WHATSAPP_CLOUD_TOKEN || process.env.META_WHATSAPP_TOKEN) &&
+      (process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.VITE_WHATSAPP_PHONE_NUMBER_ID || process.env.META_PHONE_NUMBER_ID)
+    );
+    const ultramsgConfigured = Boolean(
+      (process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID) &&
+      (process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN)
+    );
+    const twilioConfigured = Boolean(
+      (process.env.TWILIO_ACCOUNT_SID || process.env.VITE_TWILIO_ACCOUNT_SID) &&
+      (process.env.TWILIO_AUTH_TOKEN || process.env.VITE_TWILIO_AUTH_TOKEN)
+    );
+    const watiConfigured = Boolean(
+      (process.env.WATI_ACCESS_TOKEN || process.env.VITE_WATI_ACCESS_TOKEN)
+    );
+    const webhookConfigured = Boolean(
+      (process.env.WHATSAPP_WEBHOOK_URL || process.env.VITE_WHATSAPP_WEBHOOK_URL)
+    );
+
+    return res.status(200).json({
+      status: 'online',
+      service: 'Peace at Peak WhatsApp Business Dispatch API',
+      configured: metaConfigured || ultramsgConfigured || twilioConfigured || watiConfigured || webhookConfigured,
+      providers: {
+        meta_cloud_api: metaConfigured,
+        ultramsg: ultramsgConfigured,
+        wati: watiConfigured,
+        twilio: twilioConfigured,
+        custom_webhook: webhookConfigured
+      }
+    });
   }
 
   if (req.method !== 'POST') {
@@ -39,7 +75,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
     }
 
-    // Normalize phone number (Indian +91 if 10 digits, strip leading 0)
+    // Normalize phone number (standard Indian 10 digits gets 91 prefix; removes spaces, dashes, leading 0s)
     let cleanPhone = phone.toString().replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
       cleanPhone = cleanPhone.slice(1);
@@ -48,12 +84,97 @@ export default async function handler(req, res) {
       cleanPhone = `91${cleanPhone}`;
     }
 
-    // Provider 1: UltraMsg (Recommended - 1-minute QR scan, sends image directly)
+    const dispatchResults = [];
+
+    // =========================================================================
+    // PROVIDER 1: Meta WhatsApp Business Cloud API (Official Cloud API)
+    // =========================================================================
+    const metaToken = process.env.WHATSAPP_CLOUD_TOKEN || process.env.VITE_WHATSAPP_CLOUD_TOKEN || process.env.META_WHATSAPP_TOKEN;
+    const metaPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.VITE_WHATSAPP_PHONE_NUMBER_ID || process.env.META_PHONE_NUMBER_ID;
+    const metaTemplate = process.env.WHATSAPP_TEMPLATE_NAME || process.env.VITE_WHATSAPP_TEMPLATE_NAME;
+
+    if (metaToken && metaPhoneId) {
+      let metaPayload;
+
+      // If official pre-approved template name is configured (for 24/7 proactive notifications)
+      if (metaTemplate) {
+        metaPayload = {
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'template',
+          template: {
+            name: metaTemplate,
+            language: { code: process.env.WHATSAPP_TEMPLATE_LANG || 'en' },
+            components: [
+              ...(receiptImageUrl && receiptImageUrl.startsWith('http') ? [{
+                type: 'header',
+                parameters: [{ type: 'image', image: { link: receiptImageUrl } }]
+              }] : []),
+              {
+                type: 'body',
+                parameters: [
+                  { type: 'text', text: booking?.guestName || 'Valued Guest' },
+                  { type: 'text', text: booking?.id || 'PAP-CONFIRMED' },
+                  { type: 'text', text: booking?.roomName || 'Luxury Stay' },
+                  { type: 'text', text: booking?.checkIn || '' },
+                  { type: 'text', text: booking?.checkOut || '' },
+                  { type: 'text', text: `₹${Number(booking?.amount || 0).toLocaleString('en-IN')}` }
+                ]
+              }
+            ]
+          }
+        };
+      } else if (receiptImageUrl && receiptImageUrl.startsWith('http')) {
+        // Direct media message with reservation caption
+        metaPayload = {
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'image',
+          image: {
+            link: receiptImageUrl,
+            caption: message?.slice(0, 1024) || `Peace at Peak Resort - Reservation ${booking?.id || 'Confirmed'}`
+          }
+        };
+      } else {
+        // Direct text message
+        metaPayload = {
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'text',
+          text: { body: message }
+        };
+      }
+
+      const metaRes = await fetch(`https://graph.facebook.com/v21.0/${metaPhoneId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${metaToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(metaPayload)
+      });
+      const metaData = await metaRes.json();
+
+      if (metaRes.ok) {
+        return res.status(200).json({ 
+          success: true, 
+          provider: 'meta_whatsapp_cloud_api', 
+          recipient: cleanPhone,
+          details: metaData 
+        });
+      } else {
+        console.warn('Meta WhatsApp API returned error:', metaData);
+        dispatchResults.push({ provider: 'meta_whatsapp_cloud_api', error: metaData });
+      }
+    }
+
+    // =========================================================================
+    // PROVIDER 2: UltraMsg (Instant QR scan with company's WhatsApp Business app)
+    // =========================================================================
     const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID;
     const ultramsgToken = process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN;
 
     if (ultramsgInstance && ultramsgToken) {
-      // If receipt image URL is provided, send as image message with caption
       if (receiptImageUrl && receiptImageUrl.startsWith('http')) {
         const ultraRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/image`, {
           method: 'POST',
@@ -69,10 +190,10 @@ export default async function handler(req, res) {
         return res.status(200).json({ 
           success: true, 
           provider: 'ultramsg_image', 
+          recipient: cleanPhone,
           details: ultraData 
         });
       } else {
-        // Send as text chat
         const ultraRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -86,48 +207,41 @@ export default async function handler(req, res) {
         return res.status(200).json({ 
           success: true, 
           provider: 'ultramsg_text', 
+          recipient: cleanPhone,
           details: ultraData 
         });
       }
     }
 
-    // Provider 2: Meta WhatsApp Business Cloud API
-    const metaToken = process.env.WHATSAPP_CLOUD_TOKEN || process.env.VITE_WHATSAPP_CLOUD_TOKEN;
-    const metaPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.VITE_WHATSAPP_PHONE_NUMBER_ID;
+    // =========================================================================
+    // PROVIDER 3: Wati API (India's leading WhatsApp Business platform)
+    // =========================================================================
+    const watiEndpoint = process.env.WATI_API_ENDPOINT || process.env.VITE_WATI_API_ENDPOINT;
+    const watiToken = process.env.WATI_ACCESS_TOKEN || process.env.VITE_WATI_ACCESS_TOKEN;
 
-    if (metaToken && metaPhoneId) {
-      const metaPayload = receiptImageUrl && receiptImageUrl.startsWith('http') ? {
-        messaging_product: 'whatsapp',
-        to: cleanPhone,
-        type: 'image',
-        image: {
-          link: receiptImageUrl,
-          caption: message?.slice(0, 1024) || 'Your Peace at Peak Reservation Voucher'
-        }
-      } : {
-        messaging_product: 'whatsapp',
-        to: cleanPhone,
-        type: 'text',
-        text: { body: message }
-      };
-
-      const metaRes = await fetch(`https://graph.facebook.com/v19.0/${metaPhoneId}/messages`, {
+    if (watiEndpoint && watiToken) {
+      const watiBase = watiEndpoint.replace(/\/$/, '');
+      const watiRes = await fetch(`${watiBase}/api/v1/sendSessionMessage/${cleanPhone}?messageText=${encodeURIComponent(message)}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${metaToken}`,
+          'Authorization': `Bearer ${watiToken}`,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(metaPayload)
+        }
       });
-      const metaData = await metaRes.json();
-      return res.status(200).json({ 
-        success: metaRes.ok, 
-        provider: 'meta_cloud_api', 
-        details: metaData 
-      });
+      const watiData = await watiRes.json();
+      if (watiRes.ok) {
+        return res.status(200).json({
+          success: true,
+          provider: 'wati',
+          recipient: cleanPhone,
+          details: watiData
+        });
+      }
     }
 
-    // Provider 3: Twilio WhatsApp API
+    // =========================================================================
+    // PROVIDER 4: Twilio WhatsApp API
+    // =========================================================================
     const twilioSid = process.env.TWILIO_ACCOUNT_SID || process.env.VITE_TWILIO_ACCOUNT_SID;
     const twilioAuth = process.env.TWILIO_AUTH_TOKEN || process.env.VITE_TWILIO_AUTH_TOKEN;
     const twilioFrom = process.env.TWILIO_WHATSAPP_NUMBER || process.env.VITE_TWILIO_WHATSAPP_NUMBER;
@@ -153,11 +267,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ 
         success: twilioRes.ok, 
         provider: 'twilio', 
+        recipient: cleanPhone,
         details: twilioData 
       });
     }
 
-    // Provider 4: Custom Webhook (Zapier / Make / Wati / Aisensy)
+    // =========================================================================
+    // PROVIDER 5: Custom Webhook (Zapier / Make / n8n / Aisensy)
+    // =========================================================================
     const webhookUrl = process.env.WHATSAPP_WEBHOOK_URL || process.env.VITE_WHATSAPP_WEBHOOK_URL;
     if (webhookUrl) {
       const hookRes = await fetch(webhookUrl, {
@@ -173,16 +290,18 @@ export default async function handler(req, res) {
       });
       return res.status(200).json({ 
         success: hookRes.ok, 
-        provider: 'custom_webhook' 
+        provider: 'custom_webhook',
+        recipient: cleanPhone 
       });
     }
 
-    // Fallback if no provider credentials have been added to Vercel environment variables yet
+    // If configuration credentials haven't been added yet to .env / Vercel
     return res.status(200).json({
       success: false,
       requiresConfiguration: true,
       phone: cleanPhone,
-      message: 'Automated WhatsApp Gateway not configured yet. Add ULTRAMSG or META or TWILIO keys in Vercel Environment Variables.'
+      message: 'WhatsApp Business API credentials not yet detected in environment variables. Add WHATSAPP_CLOUD_TOKEN & WHATSAPP_PHONE_NUMBER_ID (Meta) or ULTRAMSG_INSTANCE_ID & ULTRAMSG_TOKEN (UltraMsg) in Vercel.',
+      attempted: dispatchResults
     });
 
   } catch (error) {

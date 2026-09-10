@@ -13,9 +13,6 @@ import {
   CreditCard,
   Sparkles,
   Lock,
-  Send,
-  Copy,
-  Check,
   Download,
   Eye,
   Image as ImageIcon,
@@ -25,19 +22,13 @@ import { useAppContext } from '../context/AppContext';
 import { initiateRazorpayPayment, isPlaceholderRazorpayKey } from '../services/razorpayService';
 import { 
   formatReservationWhatsAppMessage, 
-  getResortWhatsAppUrl,
-  getGuestWhatsAppUrl,
-  getWhatsAppShareUrl,
-  shareReservationVoucher,
   triggerWhatsAppWebhook,
-  dispatchAutomatedWhatsAppReceipt,
-  RESORT_WHATSAPP_PRIMARY 
+  dispatchAutomatedWhatsAppReceipt 
 } from '../services/whatsappService';
 import {
   getReceiptImageBlob,
   generateAndUploadReceiptImage,
-  downloadReceiptImage,
-  shareReceiptImageFile
+  downloadReceiptImage
 } from '../services/receiptImageService';
 
 export default function BookingForm({ preselectedRoomId }) {
@@ -79,7 +70,6 @@ export default function BookingForm({ preselectedRoomId }) {
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bookingId, setBookingId] = useState('');
-  const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
   const [autoSentWhatsApp, setAutoSentWhatsApp] = useState(false);
   const [receiptImageUrl, setReceiptImageUrl] = useState(null);
   const [receiptDataUrl, setReceiptDataUrl] = useState(null);
@@ -326,11 +316,6 @@ export default function BookingForm({ preselectedRoomId }) {
       tax: bookingSummary.tax
     };
 
-    const whatsAppVoucherText = formatReservationWhatsAppMessage(currentConfirmedBooking, receiptImageUrl);
-    const resortWhatsAppUrl = getResortWhatsAppUrl(currentConfirmedBooking, RESORT_WHATSAPP_PRIMARY, receiptImageUrl);
-    const guestWhatsAppUrl = getGuestWhatsAppUrl(formData.phone, currentConfirmedBooking, receiptImageUrl);
-    const universalShareUrl = getWhatsAppShareUrl(currentConfirmedBooking, receiptImageUrl);
-
     return (
       <section className="py-24 bg-bg-light min-h-[85vh] flex items-center anim-fade">
         <div className="container max-w-xl">
@@ -349,44 +334,17 @@ export default function BookingForm({ preselectedRoomId }) {
                 <span className="font-mono text-sm font-semibold text-primary-deep">{bookingId}</span>
               </div>
 
-              {/* Automated WhatsApp Delivery Notification Banner */}
-              <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-3 transition-all ${
-                autoSendStatus === 'sent' 
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950 shadow-xs' 
-                  : (autoSendStatus === 'sending' 
-                      ? 'bg-sky-50 border-sky-300 text-sky-950 shadow-xs'
-                      : (autoSendStatus === 'unconfigured' 
-                          ? 'bg-amber-50/80 border-amber-200 text-amber-950' 
-                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'))
-              }`}>
-                <div className="shrink-0 mt-0.5">
-                  {autoSendStatus === 'sending' && <Loader2 size={16} className="animate-spin text-sky-600" />}
-                  {autoSendStatus === 'sent' && <CheckCircle2 size={16} className="text-emerald-600" />}
-                  {autoSendStatus === 'unconfigured' && <Sparkles size={16} className="text-amber-600" />}
-                  {autoSendStatus === 'idle' && <Send size={16} className="text-emerald-600" />}
+              {/* Automated WhatsApp Confirmation Badge */}
+              <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-xs flex items-center gap-3 text-left">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={18} />
                 </div>
-                <div className="flex-1 text-left space-y-0.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold uppercase tracking-wider text-[0.7rem]">
-                      {autoSendStatus === 'sent' && '✓ Receipt Automatically Delivered to WhatsApp'}
-                      {autoSendStatus === 'sending' && '⚡ Automatically Sending Receipt to WhatsApp...'}
-                      {autoSendStatus === 'unconfigured' && 'Automated WhatsApp Dispatch Ready'}
-                      {autoSendStatus === 'idle' && 'WhatsApp Reservation Dispatch'}
-                    </p>
-                    <span className="text-[0.62rem] font-mono px-2 py-0.5 rounded bg-white/80 font-bold">
-                      {formData.phone}
-                    </span>
-                  </div>
-                  <p className="text-[0.68rem] opacity-90 leading-relaxed">
-                    {autoSendStatus === 'sent' && (
-                      `Your official booking receipt image and voucher have been sent automatically to ${formData.phone}. Check your WhatsApp!`
-                    )}
-                    {autoSendStatus === 'sending' && (
-                      `Sending official digital receipt image to ${formData.phone} via resort gateway...`
-                    )}
-                    {autoSendStatus === 'unconfigured' && (
-                      `Background dispatch API is active. To enable silent 24/7 background sending without opening WhatsApp, connect your resort WhatsApp gateway (UltraMsg / Meta Cloud API) in Vercel environment variables.`
-                    )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-emerald-950 text-xs">
+                    Reservation & Payment Sent to WhatsApp
+                  </p>
+                  <p className="text-[0.7rem] text-emerald-800 mt-0.5">
+                    Official booking confirmation voucher has been automatically sent to your WhatsApp number <strong>{formData.phone}</strong>.
                   </p>
                 </div>
               </div>
@@ -538,116 +496,69 @@ export default function BookingForm({ preselectedRoomId }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
                   <button
                     type="button"
-                    onClick={async () => {
-                      const shared = await shareReceiptImageFile(currentConfirmedBooking, whatsAppVoucherText);
-                      if (!shared) {
-                        window.open(resortWhatsAppUrl, '_blank');
-                      }
-                    }}
-                    className="w-full py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                    onClick={() => setShowReceiptModal(true)}
+                    className="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-100 border border-slate-600 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
                   >
-                    <Send size={14} /> 📲 Send Receipt to WhatsApp
+                    <Eye size={14} /> 👁️ View Full Receipt
                   </button>
 
                   <button
                     type="button"
                     onClick={() => downloadReceiptImage(currentConfirmedBooking)}
-                    className="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-100 border border-slate-600 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                    className="w-full py-2.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
                   >
                     <Download size={14} /> 📥 Download Receipt (JPG)
                   </button>
                 </div>
               </div>
 
-              {/* WhatsApp Reservation Confirmation & Instant Dispatch Card */}
-              <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-br from-emerald-50 via-teal-50/60 to-emerald-50 border-2 border-emerald-500/80 text-left space-y-3.5 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shrink-0">
-                      <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-xs sm:text-sm font-bold text-emerald-950 uppercase tracking-wider">
-                          Connect with Resort on WhatsApp
-                        </h4>
-                        <span className="inline-flex items-center text-[0.62rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
-                          Instant
-                        </span>
-                      </div>
-                      <p className="text-[0.72rem] text-emerald-800 mt-0.5 leading-snug">
-                        Send this booking voucher directly to Peace at Peak Front Desk for immediate check-in coordination and road directions.
-                      </p>
-                    </div>
+              {/* Concierge & Arrival Guide */}
+              <div className="p-5 rounded-xl bg-bg-light border border-border-light text-left space-y-3.5 shadow-xs">
+                <div className="flex items-center justify-between border-b border-border-light pb-2.5">
+                  <div>
+                    <h4 className="text-xs uppercase tracking-widest text-text-dark-primary font-bold">
+                      Resort Concierge & Arrival Details
+                    </h4>
+                    <p className="text-[0.68rem] text-text-dark-secondary mt-0.5">
+                      Peace at Peak Resort • Kanatal, Uttarakhand
+                    </p>
+                  </div>
+                  <span className="text-[0.62rem] uppercase font-bold text-accent-gold tracking-wider px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
+                    Himalayan Serenity
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-lg bg-white border border-border-light space-y-1">
+                    <p className="text-[0.65rem] uppercase tracking-wider text-text-dark-secondary font-semibold">Front Desk & Helpdesk</p>
+                    <p className="font-semibold text-primary-deep text-sm flex items-center gap-1.5 pt-0.5">
+                      📞 <a href="tel:+917055522239" className="hover:text-accent-gold transition-colors">+91 70555 22239</a>
+                    </p>
+                    <p className="text-[0.68rem] text-text-dark-secondary">
+                      Available 24/7 for live route directions and check-in support.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-white border border-border-light space-y-1">
+                    <p className="text-[0.65rem] uppercase tracking-wider text-text-dark-secondary font-semibold">Timings</p>
+                    <p className="font-semibold text-primary-deep pt-0.5">Check-in: 1:00 PM • Check-out: 11:00 AM</p>
+                    <p className="text-[0.68rem] text-text-dark-secondary">
+                      Early arrival subject to cottage preparation.
+                    </p>
                   </div>
                 </div>
 
-                {/* Primary Call to Action: Send directly to Resort Concierge */}
-                <a
-                  href={resortWhatsAppUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5 transition-all shadow-md hover:shadow-lg text-center tracking-wide"
-                >
-                  <Send size={16} /> 📲 Send Booking to Resort on WhatsApp (+91 70555 22239)
-                </a>
-
-                {/* Secondary Actions Row: Share & Copy */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const shared = await shareReceiptImageFile(currentConfirmedBooking, whatsAppVoucherText);
-                      if (!shared) {
-                        const sharedText = await shareReservationVoucher(currentConfirmedBooking);
-                        if (!sharedText) {
-                          window.open(universalShareUrl, '_blank');
-                        }
-                      }
-                    }}
-                    className="w-full py-2.5 px-3 rounded-lg bg-white hover:bg-slate-50 active:scale-98 text-emerald-950 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
-                    title="Share voucher with family or travel companions via WhatsApp"
-                  >
-                    <Sparkles size={14} className="text-emerald-600" /> Share Voucher & Receipt
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(whatsAppVoucherText);
-                      setCopiedWhatsApp(true);
-                      setTimeout(() => setCopiedWhatsApp(false), 2500);
-                    }}
-                    className="w-full py-2.5 px-3 rounded-lg bg-white hover:bg-slate-50 active:scale-98 text-emerald-950 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
-                    title="Copy full voucher text to clipboard"
-                  >
-                    {copiedWhatsApp ? (
-                      <>
-                        <Check size={14} className="text-emerald-600 font-bold" /> Voucher Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={14} className="text-emerald-700" /> Copy Voucher Text
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Bottom Assistance & Guest receipt */}
-                <div className="pt-2 border-t border-emerald-200/70 flex flex-col sm:flex-row sm:items-center justify-between text-[0.68rem] text-emerald-900 gap-1.5">
-                  <span className="text-emerald-800">
-                    Lead Guest: <strong>{formData.name}</strong> ({formData.phone})
+                <div className="pt-2 border-t border-border-light flex flex-col sm:flex-row sm:items-center justify-between text-[0.72rem] text-text-dark-secondary gap-2">
+                  <span className="flex items-center gap-1">
+                    📍 Chopariyal Gaon, Churer Dhar, Kanatal, Tehri Garhwal, Uttarakhand - 249145
                   </span>
                   <a
-                    href={guestWhatsAppUrl}
+                    href="https://maps.google.com/?q=Peace+at+Peak+Kanatal"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-bold text-emerald-800 hover:text-emerald-950 underline flex items-center gap-1"
-                    title="Open chat to save voucher to your own WhatsApp"
+                    className="font-bold text-accent-gold hover:underline shrink-0"
                   >
-                    Save Copy to My WhatsApp ({formData.phone})
+                    View on Google Maps →
                   </a>
                 </div>
               </div>

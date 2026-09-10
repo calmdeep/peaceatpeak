@@ -42,7 +42,8 @@ import {
   Eye,
   Globe,
   Smartphone,
-  Monitor
+  Monitor,
+  Send
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { uploadResortImageToStorage } from '../services/firebaseService';
@@ -132,6 +133,69 @@ export default function AdminDashboard({ onBackToSite }) {
   const [totalUnitsDraft, setTotalUnitsDraft] = useState(selectedRoom?.totalUnits || 5);
   const [unitLabelDraft, setUnitLabelDraft] = useState(selectedRoom?.unitLabel || 'Units');
   const [pricingSaved, setPricingSaved] = useState(false);
+
+  // Space Specifications Draft
+  const [spaceSpecsDraft, setSpaceSpecsDraft] = useState('');
+
+  // WhatsApp Business Automation Diagnostics Draft
+  const [testPhone, setTestPhone] = useState('');
+  const [testStatus, setTestStatus] = useState(null);
+  const [apiGatewayStatus, setApiGatewayStatus] = useState(null);
+
+  useEffect(() => {
+    if (activeNav === 'settings') {
+      fetch('/api/send-whatsapp')
+        .then(r => r.json())
+        .then(data => setApiGatewayStatus(data))
+        .catch(() => setApiGatewayStatus({ configured: false, status: 'offline' }));
+    }
+  }, [activeNav]);
+
+  const handleSendTestWhatsApp = async () => {
+    if (!testPhone) {
+      alert('Please enter a WhatsApp phone number with country code (e.g. 917055522239).');
+      return;
+    }
+    setTestStatus({ loading: true, message: `Sending test reservation confirmation to ${testPhone}...` });
+    try {
+      const res = await fetch('/api/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: testPhone,
+          message: '✨ *TEST DISPATCH FROM PEACE AT PEAK RESORT*\nYour automated WhatsApp Business API profile is active and verified! Reservation vouchers and payment confirmations will be sent automatically to this number on booking.',
+          booking: {
+            id: 'TEST-' + Math.floor(1000 + Math.random() * 9000),
+            guestName: 'Valued Guest',
+            roomName: 'Luxury Himalayan Sanctuary',
+            amount: 4500,
+            checkIn: new Date().toISOString().split('T')[0],
+            checkOut: new Date(Date.now() + 86400000).toISOString().split('T')[0]
+          }
+        })
+      });
+      const data = await res.json();
+      if (data?.success) {
+        setTestStatus({ 
+          loading: false, 
+          success: true, 
+          message: `✓ Success! Sent via ${data.provider} to +${data.recipient || testPhone}. Check WhatsApp!` 
+        });
+      } else {
+        setTestStatus({ 
+          loading: false, 
+          success: false, 
+          message: data?.message || data?.error || 'Could not dispatch test. Check API credentials in Vercel environment variables.' 
+        });
+      }
+    } catch (err) {
+      setTestStatus({ 
+        loading: false, 
+        success: false, 
+        message: err.message || 'Error connecting to /api/send-whatsapp endpoint.' 
+      });
+    }
+  };
 
   // Room Specifications Draft
   const [nameDraft, setNameDraft] = useState(selectedRoom?.name || '');
@@ -3189,6 +3253,106 @@ export default function AdminDashboard({ onBackToSite }) {
                   <span className="pms-label text-slate-500">Reservations</span>
                   <h4 className="text-xl font-bold text-slate-900 mt-1">{bookings.length} Bookings</h4>
                   <p className="text-[0.7rem] text-slate-500 mt-0.5">Key: <code>pap_bookings_data</code></p>
+                </div>
+              </div>
+
+              {/* WhatsApp Business Profile Automation Card */}
+              <div className="pms-card p-6 border-emerald-200 bg-emerald-50/30 max-w-3xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 text-emerald-950 font-bold text-base">
+                    <ShieldCheck size={22} className="text-emerald-600" />
+                    <span>Company WhatsApp Business Profile Automation</span>
+                  </div>
+                  <span className={`text-[0.68rem] px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                    apiGatewayStatus?.configured 
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${apiGatewayStatus?.configured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                    {apiGatewayStatus?.configured ? 'Gateway Active' : 'Gateway Pending Config'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  When guests book and pay on your website, your company's official WhatsApp Business Profile automatically sends their reservation voucher, boarding pass, and payment verification directly to their phone number. No manual clicks required.
+                </p>
+
+                {/* Gateway Provider Status Pills */}
+                <div className="p-3.5 rounded-xl bg-white border border-emerald-200/80 space-y-2">
+                  <span className="text-[0.65rem] uppercase tracking-wider text-slate-500 font-bold block">
+                    Supported WhatsApp Business Gateways
+                  </span>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className={`px-2.5 py-1 rounded-lg border font-medium flex items-center gap-1.5 ${
+                      apiGatewayStatus?.providers?.meta_cloud_api 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold' 
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>
+                      Meta Cloud API (Official) {apiGatewayStatus?.providers?.meta_cloud_api ? '✓ Connected' : ''}
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-lg border font-medium flex items-center gap-1.5 ${
+                      apiGatewayStatus?.providers?.ultramsg 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold' 
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>
+                      UltraMsg (QR Scan) {apiGatewayStatus?.providers?.ultramsg ? '✓ Connected' : ''}
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-lg border font-medium flex items-center gap-1.5 ${
+                      apiGatewayStatus?.providers?.wati 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold' 
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>
+                      Wati / Aisensy {apiGatewayStatus?.providers?.wati ? '✓ Connected' : ''}
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-lg border font-medium flex items-center gap-1.5 ${
+                      apiGatewayStatus?.providers?.twilio 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold' 
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>
+                      Twilio WhatsApp {apiGatewayStatus?.providers?.twilio ? '✓ Connected' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Test Console */}
+                <div className="p-4 rounded-xl bg-slate-900 text-white space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                      <Send size={13} className="text-emerald-400" /> Test WhatsApp Dispatch to Phone
+                    </span>
+                    <span className="text-[0.65rem] text-slate-400">Direct API Simulator</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. 917055522239 or 9876543210"
+                      value={testPhone}
+                      onChange={e => setTestPhone(e.target.value)}
+                      className="pms-input bg-slate-800 text-white border-slate-700 text-xs flex-1 placeholder:text-slate-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={testStatus?.loading}
+                      onClick={handleSendTestWhatsApp}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {testStatus?.loading ? 'Sending...' : 'Send Test WhatsApp'}
+                    </button>
+                  </div>
+
+                  {testStatus && (
+                    <div className={`p-2.5 rounded-lg text-xs flex items-start gap-2 ${
+                      testStatus.loading 
+                        ? 'bg-sky-950/80 border border-sky-800 text-sky-200'
+                        : (testStatus.success 
+                            ? 'bg-emerald-950/80 border border-emerald-700 text-emerald-200' 
+                            : 'bg-amber-950/80 border border-amber-800 text-amber-200')
+                    }`}>
+                      <span className="shrink-0">{testStatus.success ? '✓' : (testStatus.loading ? '⚡' : '⚠️')}</span>
+                      <span className="leading-relaxed">{testStatus.message}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
