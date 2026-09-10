@@ -7,6 +7,8 @@
  */
 
 import { uploadImageToPublicCDN } from './imageUploadService';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
  * Renders the Peace at Peak reservation boarding pass onto an HTML5 Canvas
@@ -390,7 +392,24 @@ export function getReceiptImageBlob(booking, quality = 0.92) {
  */
 export async function generateAndUploadReceiptImage(booking) {
   try {
-    const { blob } = await getReceiptImageBlob(booking, 0.90);
+    const { blob, dataUrl } = await getReceiptImageBlob(booking, 0.90);
+
+    // 1. Try Firebase Storage if initialized
+    if (storage) {
+      try {
+        const safeId = (booking.id || `pap_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const storageRef = ref(storage, `receipts/${safeId}.jpg`);
+        await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
+        const firebaseUrl = await getDownloadURL(storageRef);
+        if (firebaseUrl && firebaseUrl.startsWith('http')) {
+          return firebaseUrl;
+        }
+      } catch (storageErr) {
+        console.warn('Firebase storage receipt upload notice:', storageErr);
+      }
+    }
+
+    // 2. Try Public CDN
     const receiptFile = new File([blob], `Peace_at_Peak_Receipt_${booking.id || 'Confirmed'}.jpg`, {
       type: 'image/jpeg'
     });
@@ -398,7 +417,9 @@ export async function generateAndUploadReceiptImage(booking) {
     if (publicUrl && publicUrl.startsWith('http')) {
       return publicUrl;
     }
-    return null;
+
+    // 3. Fallback to ultra high-quality base64 Data URL (UltraMsg supports it directly!)
+    return dataUrl;
   } catch (err) {
     console.warn('Auto-upload receipt image warning:', err);
     return null;

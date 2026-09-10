@@ -179,9 +179,32 @@ export default async function handler(req, res) {
       let textSent = false;
       let ultraResponseDetails = null;
 
-      // 1. If public receipt image URL exists, send the receipt image
-      if (receiptImageUrl && receiptImageUrl.startsWith('http')) {
+      // 1. Primary: If receipt image exists (HTTP URL or Base64 Data URL), send the image bill
+      if (receiptImageUrl && (receiptImageUrl.startsWith('http') || receiptImageUrl.startsWith('data:image/'))) {
         try {
+          const isPaid = booking?.paymentStatus === 'paid' || booking?.paymentId;
+          const isAdvance = booking?.paymentStatus === 'advance_paid';
+          const paymentBadge = isPaid ? 'VERIFIED ONLINE' : (isAdvance ? '50% ADVANCE DEPOSIT' : 'PAY ON ARRIVAL');
+
+          const imageCaption = [
+            '━━━━━━━━━━━━━━━━━━━━',
+            '✨ *RESERVATION CONFIRMED* ✨',
+            '*PEACE AT PEAK RESORT, KANATAL*',
+            '━━━━━━━━━━━━━━━━━━━━',
+            '',
+            `📋 *Booking ID:* ${booking?.id || 'PAP-CONFIRMED'}`,
+            `👤 *Lead Guest:* ${booking?.guestName || 'Valued Guest'}`,
+            `🏨 *Sanctuary:* ${booking?.roomName || 'Luxury Stay'}`,
+            `📅 *Stay Dates:* ${booking?.checkIn || ''} to ${booking?.checkOut || ''}`,
+            `💳 *Payment:* ₹${Number(booking?.paidAmount || booking?.amount || 0).toLocaleString('en-IN')} (${paymentBadge})`,
+            booking?.balanceAmount > 0 ? `💰 *Balance on Arrival:* ₹${Number(booking.balanceAmount).toLocaleString('en-IN')}` : null,
+            '',
+            '📍 *Location:* Chopariyal Gaon, Churer Dhar, Kanatal - 8500 Ft',
+            '📞 *Reception:* +91 70555 22239',
+            '',
+            '🧾 *Your official reservation voucher & billing receipt image is attached above.*'
+          ].filter(Boolean).join('\n');
+
           const ultraImgRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/image`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -189,32 +212,34 @@ export default async function handler(req, res) {
               token: ultramsgToken,
               to: cleanPhone,
               image: receiptImageUrl,
-              caption: `✨ Peace at Peak Resort - Reservation Confirmed\nBooking ID: ${booking?.id || 'PAP-CONFIRMED'}`
+              caption: imageCaption
             })
           });
           const imgData = await ultraImgRes.json();
-          imageSent = Boolean(imgData?.id || imgData?.sent);
+          imageSent = Boolean(imgData?.id || imgData?.sent === 'true' || imgData?.sent === true);
           ultraResponseDetails = imgData;
         } catch (imgErr) {
           console.warn('UltraMsg image send notice:', imgErr);
         }
       }
 
-      // 2. Send the detailed text voucher message
-      const ultraTextRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          token: ultramsgToken,
-          to: cleanPhone,
-          body: message
-        })
-      });
-      const textData = await ultraTextRes.json();
-      textSent = Boolean(textData?.id || textData?.sent);
-      ultraResponseDetails = textData || ultraResponseDetails;
+      // 2. Fallback: Only send text message if image was NOT sent
+      if (!imageSent && message) {
+        const ultraTextRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            token: ultramsgToken,
+            to: cleanPhone,
+            body: message
+          })
+        });
+        const textData = await ultraTextRes.json();
+        textSent = Boolean(textData?.id || textData?.sent === 'true' || textData?.sent === true);
+        ultraResponseDetails = textData || ultraResponseDetails;
+      }
 
-      if (textSent || imageSent) {
+      if (imageSent || textSent) {
         return res.status(200).json({ 
           success: true, 
           provider: 'ultramsg', 
