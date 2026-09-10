@@ -5,14 +5,19 @@ import {
   syncRoomToFirestore,
   deleteRoomFromFirestore,
   seedInitialRoomsIfEmpty,
+  fetchLatestRoomsFromFirestore,
   subscribeToBookings,
   syncBookingToFirestore,
   updateBookingStatusInFirestore,
   deleteBookingFromFirestore,
   subscribeToPropertySpaces,
   syncPropertySpaceToFirestore,
+  seedInitialSpacesIfEmpty,
+  fetchLatestSpacesFromFirestore,
   subscribeToHeroSlides,
-  syncHeroSlidesToFirestore
+  syncHeroSlidesToFirestore,
+  seedInitialHeroIfEmpty,
+  fetchLatestHeroFromFirestore
 } from '../services/firebaseService';
 
 export const DEFAULT_ROOMS = [
@@ -261,6 +266,10 @@ export function AppProvider({ children }) {
     }
   });
 
+  // Live Cloud Firestore Real-Time Connectivity Status
+  const [firestoreSyncStatus, setFirestoreSyncStatus] = useState(isFirebaseConfigured() ? 'connected' : 'offline');
+  const [lastCloudSync, setLastCloudSync] = useState(() => new Date().toISOString());
+
   // Save changes to localStorage and broadcast across open tabs & admin panels
   useEffect(() => {
     try {
@@ -388,75 +397,46 @@ export function AppProvider({ children }) {
 
   // Real-Time Firebase Cloud Firestore Synchronization
   useEffect(() => {
-    if (!isFirebaseConfigured()) return;
+    if (!isFirebaseConfigured()) {
+      setFirestoreSyncStatus('offline');
+      return;
+    }
 
-    // Seed rooms to Firestore if newly created database
-    seedInitialRoomsIfEmpty(rooms);
+    // Seed default collections if empty on brand-new cloud database
+    seedInitialRoomsIfEmpty(DEFAULT_ROOMS);
+    seedInitialSpacesIfEmpty(DEFAULT_PROPERTY_SPACES);
+    seedInitialHeroIfEmpty(DEFAULT_HERO_SLIDES);
 
-    // 1. Rooms Live Subscription - Syncs changes without resurrecting deleted photos or overwriting newer local edits
+    setFirestoreSyncStatus('connected');
+    setLastCloudSync(new Date().toISOString());
+
+    // 1. Rooms Live Subscription: Firestore is the authoritative source of truth
     const unsubRooms = subscribeToRooms((cloudRooms) => {
       if (Array.isArray(cloudRooms) && cloudRooms.length > 0) {
-        setRooms(prev => {
-          const prevMap = new Map(prev.map(currentRoom => [currentRoom.id, currentRoom]));
-          const merged = cloudRooms.map(match => {
-            const currentRoom = prevMap.get(match.id);
-            if (!currentRoom) return match;
-
-            const cloudTime = new Date(match.updatedAt || 0).getTime();
-            const localTime = new Date(currentRoom.updatedAt || 0).getTime();
-            if (localTime > cloudTime) {
-              return currentRoom;
-            }
-
-            return {
-              ...currentRoom,
-              ...match,
-              images: Array.isArray(match.images) && match.images.length > 0 ? match.images : currentRoom.images,
-              image: match.image || (Array.isArray(match.images) && match.images[0]) || currentRoom.image
-            };
-          });
-
-          // Retain any newly created local room not yet synced to cloud
-          prev.forEach(r => {
-            if (!merged.find(m => m.id === r.id)) {
-              const localTime = new Date(r.updatedAt || 0).getTime();
-              if (Date.now() - localTime < 60000) {
-                merged.push(r);
-              }
-            }
-          });
-
-          return merged;
-        });
+        setRooms(cloudRooms);
+        setFirestoreSyncStatus('connected');
+        setLastCloudSync(new Date().toISOString());
       }
+    }, (err) => {
+      console.warn('Firestore rooms listener warning:', err);
+      setFirestoreSyncStatus('offline');
     });
 
     // 2. Bookings Live Subscription
     const unsubBookings = subscribeToBookings((cloudBookings) => {
       if (Array.isArray(cloudBookings)) {
         setBookings(cloudBookings);
+        setLastCloudSync(new Date().toISOString());
       }
+    }, (err) => {
+      console.warn('Firestore bookings listener warning:', err);
     });
 
-    // 3. Property Spaces Live Subscription - Safe timestamped merge
+    // 3. Property Spaces Live Subscription
     const unsubSpaces = subscribeToPropertySpaces((cloudSpaces) => {
       if (Array.isArray(cloudSpaces) && cloudSpaces.length > 0) {
-        setPropertySpaces(prev => {
-          return prev.map(currentSpace => {
-            const match = cloudSpaces.find(cs => cs.id === currentSpace.id);
-            if (!match) return currentSpace;
-
-            const cloudTime = new Date(match.updatedAt || 0).getTime();
-            const localTime = new Date(currentSpace.updatedAt || 0).getTime();
-            if (localTime > cloudTime) return currentSpace;
-
-            return {
-              ...currentSpace,
-              ...match,
-              images: Array.isArray(match.images) && match.images.length > 0 ? match.images : currentSpace.images
-            };
-          });
-        });
+        setPropertySpaces(cloudSpaces);
+        setLastCloudSync(new Date().toISOString());
       }
     });
 
@@ -464,6 +444,7 @@ export function AppProvider({ children }) {
     const unsubHero = subscribeToHeroSlides((cloudSlides) => {
       if (Array.isArray(cloudSlides) && cloudSlides.length > 0) {
         setHeroSlides(cloudSlides);
+        setLastCloudSync(new Date().toISOString());
       }
     });
 
@@ -521,7 +502,7 @@ export function AppProvider({ children }) {
   };
 
   // Rooms Management
-  const addNewRoom = (newRoomData) => {
+  const addNewRoom = async (newRoomData) => {
     const now = new Date().toISOString();
     const id = newRoomData.id || `sanctuary_${Date.now()}`;
     const cleanRoom = {
@@ -552,61 +533,73 @@ export function AppProvider({ children }) {
       updatedAt: now
     };
 
-    setRooms(prev => {
-      const next = [...prev, cleanRoom];
-      setTimeout(() => syncRoomToFirestore(cleanRoom.id, cleanRoom), 0);
-      return next;
-    });
-    return cleanRoom;
+    setRooms(prev => [...prev, cleanRoom]);
+    const ok = await syncRoomToFirestore(cleanRoom.id, cleanRoom);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok, room: cleanRoom };
   };
 
-  const deleteRoom = (roomId) => {
-    setRooms(prev => {
-      const next = prev.filter(room => room.id !== roomId);
-      setTimeout(() => deleteRoomFromFirestore(roomId), 0);
-      return next;
-    });
+  const deleteRoom = async (roomId) => {
+    setRooms(prev => prev.filter(room => room.id !== roomId));
+    const ok = await deleteRoomFromFirestore(roomId);
+    if (ok) setLastCloudSync(new Date().toISOString());
+    return { success: ok };
   };
 
-  const updateRoom = (roomId, updates) => {
+  const updateRoom = async (roomId, updates) => {
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setRooms(prev => {
-      const next = prev.map(room => (room.id === roomId ? { ...room, ...updates, updatedAt: now } : room));
-      const target = next.find(r => r.id === roomId);
-      if (target) {
-        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
-      }
+      const next = prev.map(room => {
+        if (room.id === roomId) {
+          updatedTarget = { ...room, ...updates, updatedAt: now };
+          return updatedTarget;
+        }
+        return room;
+      });
       return next;
     });
+
+    if (updatedTarget) {
+      const ok = await syncRoomToFirestore(roomId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false, error: 'Room not found' };
   };
 
-  const addRoomImage = (roomId, imageUrl) => {
-    if (!imageUrl) return;
+  const addRoomImage = async (roomId, imageUrl) => {
+    if (!imageUrl) return { success: false };
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId) {
           const updatedImages = [...(room.images || []), imageUrl];
-          return {
+          updatedTarget = {
             ...room,
             images: updatedImages,
             image: room.image || imageUrl,
             updatedAt: now
           };
+          return updatedTarget;
         }
         return room;
       });
-      const target = next.find(r => r.id === roomId);
-      if (target) {
-        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncRoomToFirestore(roomId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const replaceRoomImage = (roomId, imageIndex, newImageUrl) => {
-    if (!newImageUrl) return;
+  const replaceRoomImage = async (roomId, imageIndex, newImageUrl) => {
+    if (!newImageUrl) return { success: false };
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && Array.isArray(room.images)) {
@@ -614,25 +607,29 @@ export function AppProvider({ children }) {
           const oldPrimary = room.image;
           const wasCover = oldPrimary === updatedImages[imageIndex] || imageIndex === 0;
           updatedImages[imageIndex] = newImageUrl;
-          return {
+          updatedTarget = {
             ...room,
             images: updatedImages,
             image: wasCover ? newImageUrl : (room.image || newImageUrl),
             updatedAt: now
           };
+          return updatedTarget;
         }
         return room;
       });
-      const target = next.find(r => r.id === roomId);
-      if (target) {
-        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncRoomToFirestore(roomId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const reorderRoomImages = (roomId, fromIndex, toIndex) => {
+  const reorderRoomImages = async (roomId, fromIndex, toIndex) => {
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && Array.isArray(room.images)) {
@@ -642,140 +639,168 @@ export function AppProvider({ children }) {
           const updatedImages = [...room.images];
           const [movedItem] = updatedImages.splice(fromIndex, 1);
           updatedImages.splice(toIndex, 0, movedItem);
-          return {
+          updatedTarget = {
             ...room,
             images: updatedImages,
             image: updatedImages[0] || room.image || '',
             updatedAt: now
           };
+          return updatedTarget;
         }
         return room;
       });
-      const target = next.find(r => r.id === roomId);
-      if (target) {
-        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncRoomToFirestore(roomId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const removeRoomImage = (roomId, imageIndex) => {
-    const now = new Date().toISOString();
+  const removeRoomImage = async (roomId, imageIndex) => {
+    let updatedTarget = null;
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && Array.isArray(room.images)) {
           const removedUrl = room.images[imageIndex];
-          const newImages = room.images.filter((_, idx) => idx !== imageIndex);
+          const updatedImages = room.images.filter((_, idx) => idx !== imageIndex);
           let newCover = room.image;
-          if (room.image === removedUrl || !newImages.includes(room.image)) {
-            newCover = newImages.length > 0 ? newImages[0] : '';
+          if (room.image === removedUrl || !updatedImages.includes(room.image)) {
+            newCover = updatedImages.length > 0 ? updatedImages[0] : '';
           }
-          return {
+          updatedTarget = {
             ...room,
-            images: newImages,
+            images: updatedImages,
             image: newCover,
-            updatedAt: now
+            updatedAt: new Date().toISOString()
           };
+          return updatedTarget;
         }
         return room;
       });
-      const target = next.find(r => r.id === roomId);
-      if (target) {
-        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncRoomToFirestore(roomId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const setRoomPrimaryImage = (roomId, imageIndex) => {
+  const setRoomPrimaryImage = async (roomId, imageIndex) => {
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setRooms(prev => {
       const next = prev.map(room => {
         if (room.id === roomId && room.images && room.images[imageIndex]) {
           const selectedImg = room.images[imageIndex];
           const reordered = [selectedImg, ...room.images.filter((_, idx) => idx !== imageIndex)];
-          return {
+          updatedTarget = {
             ...room,
             image: selectedImg,
             images: reordered,
             updatedAt: now
           };
+          return updatedTarget;
         }
         return room;
       });
-      const target = next.find(r => r.id === roomId);
-      if (target) {
-        setTimeout(() => syncRoomToFirestore(roomId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncRoomToFirestore(roomId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
   // Property Spaces Management (Dining Hall & Reception Lounge)
-  const updatePropertySpace = (spaceId, updates) => {
+  const updatePropertySpace = async (spaceId, updates) => {
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setPropertySpaces(prev => {
-      const next = prev.map(space => (space.id === spaceId ? { ...space, ...updates, updatedAt: now } : space));
-      const target = next.find(s => s.id === spaceId);
-      if (target) {
-        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
-      }
+      const next = prev.map(space => {
+        if (space.id === spaceId) {
+          updatedTarget = { ...space, ...updates, updatedAt: now };
+          return updatedTarget;
+        }
+        return space;
+      });
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false, error: 'Space not found' };
   };
 
-  const addSpaceImage = (spaceId, imageUrl) => {
-    if (!imageUrl) return;
+  const addSpaceImage = async (spaceId, imageUrl) => {
+    if (!imageUrl) return { success: false };
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId) {
           const updatedImages = [...(space.images || []), imageUrl];
-          return {
+          updatedTarget = {
             ...space,
             images: updatedImages,
             image: space.image || imageUrl,
             updatedAt: now
           };
+          return updatedTarget;
         }
         return space;
       });
-      const target = next.find(s => s.id === spaceId);
-      if (target) {
-        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const replaceSpaceImage = (spaceId, imageIndex, newImageUrl) => {
-    if (!newImageUrl) return;
+  const replaceSpaceImage = async (spaceId, imageIndex, newImageUrl) => {
+    if (!newImageUrl) return { success: false };
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && Array.isArray(space.images)) {
           const updatedImages = [...space.images];
           const wasCover = space.image === updatedImages[imageIndex] || imageIndex === 0;
           updatedImages[imageIndex] = newImageUrl;
-          return {
+          updatedTarget = {
             ...space,
             images: updatedImages,
             image: wasCover ? newImageUrl : (space.image || newImageUrl),
             updatedAt: now
           };
+          return updatedTarget;
         }
         return space;
       });
-      const target = next.find(s => s.id === spaceId);
-      if (target) {
-        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const reorderSpaceImages = (spaceId, fromIndex, toIndex) => {
+  const reorderSpaceImages = async (spaceId, fromIndex, toIndex) => {
     const now = new Date().toISOString();
+    let updatedTarget = null;
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && Array.isArray(space.images)) {
@@ -785,24 +810,28 @@ export function AppProvider({ children }) {
           const updatedImages = [...space.images];
           const [movedItem] = updatedImages.splice(fromIndex, 1);
           updatedImages.splice(toIndex, 0, movedItem);
-          return {
+          updatedTarget = {
             ...space,
             images: updatedImages,
             image: updatedImages[0] || space.image || '',
             updatedAt: now
           };
+          return updatedTarget;
         }
         return space;
       });
-      const target = next.find(s => s.id === spaceId);
-      if (target) {
-        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const removeSpaceImage = (spaceId, imageIndex) => {
+  const removeSpaceImage = async (spaceId, imageIndex) => {
+    let updatedTarget = null;
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && space.images) {
@@ -812,42 +841,51 @@ export function AppProvider({ children }) {
           if (space.image === removedUrl || !newImages.includes(space.image)) {
             newCover = newImages.length > 0 ? newImages[0] : '';
           }
-          return {
+          updatedTarget = {
             ...space,
             images: newImages,
-            image: newCover
+            image: newCover,
+            updatedAt: new Date().toISOString()
           };
+          return updatedTarget;
         }
         return space;
       });
-      const target = next.find(s => s.id === spaceId);
-      if (target) {
-        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
-  const setSpacePrimaryImage = (spaceId, imageIndex) => {
+  const setSpacePrimaryImage = async (spaceId, imageIndex) => {
+    let updatedTarget = null;
     setPropertySpaces(prev => {
       const next = prev.map(space => {
         if (space.id === spaceId && space.images && space.images[imageIndex]) {
           const selectedImg = space.images[imageIndex];
           const reordered = [selectedImg, ...space.images.filter((_, idx) => idx !== imageIndex)];
-          return {
+          updatedTarget = {
             ...space,
             image: selectedImg,
-            images: reordered
+            images: reordered,
+            updatedAt: new Date().toISOString()
           };
+          return updatedTarget;
         }
         return space;
       });
-      const target = next.find(s => s.id === spaceId);
-      if (target) {
-        setTimeout(() => syncPropertySpaceToFirestore(spaceId, target), 0);
-      }
       return next;
     });
+    if (updatedTarget) {
+      const ok = await syncPropertySpaceToFirestore(spaceId, updatedTarget);
+      if (ok) setLastCloudSync(new Date().toISOString());
+      return { success: ok };
+    }
+    return { success: false };
   };
 
   // Hero Slides Management
@@ -901,20 +939,50 @@ export function AppProvider({ children }) {
       }
 
       // Sync to Firebase Cloud Firestore
-      syncHeroSlidesToFirestore(targetSlides);
+      const ok = await syncHeroSlidesToFirestore(targetSlides);
+      if (ok) setLastCloudSync(new Date().toISOString());
 
       // Publish to cloud store fallback for remote devices / mobile phones
       const cloudUrl = 'https://kvdb.io/4y9K3mP8vWq6xT2nZb7L1e/pap_cloud_hero_sync';
-      await fetch(cloudUrl, {
+      fetch(cloudUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slides: targetSlides, timestamp })
       }).catch(() => null);
 
-      return true;
+      return { success: ok };
     } catch (e) {
       console.warn('Publish slides error', e);
-      return true;
+      return { success: false, error: e.message };
+    }
+  };
+
+  // One-click Force Cloud Re-synchronization from Firestore
+  const forceCloudResync = async () => {
+    setFirestoreSyncStatus('syncing');
+    try {
+      const [cloudRooms, cloudSpaces, cloudHero] = await Promise.all([
+        fetchLatestRoomsFromFirestore(),
+        fetchLatestSpacesFromFirestore(),
+        fetchLatestHeroFromFirestore()
+      ]);
+
+      if (Array.isArray(cloudRooms) && cloudRooms.length > 0) {
+        setRooms(cloudRooms);
+      }
+      if (Array.isArray(cloudSpaces) && cloudSpaces.length > 0) {
+        setPropertySpaces(cloudSpaces);
+      }
+      if (Array.isArray(cloudHero) && cloudHero.length > 0) {
+        setHeroSlides(cloudHero);
+      }
+      setFirestoreSyncStatus('connected');
+      setLastCloudSync(new Date().toISOString());
+      return { success: true };
+    } catch (err) {
+      console.error('forceCloudResync error:', err);
+      setFirestoreSyncStatus('offline');
+      return { success: false, error: err.message };
     }
   };
 
@@ -1030,6 +1098,9 @@ export function AppProvider({ children }) {
     <AppContext.Provider
       value={{
         isFirebaseActive: isFirebaseConfigured(),
+        firestoreSyncStatus,
+        lastCloudSync,
+        forceCloudResync,
         rooms,
         setRooms,
         addNewRoom,

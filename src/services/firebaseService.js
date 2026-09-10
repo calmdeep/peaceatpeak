@@ -1,6 +1,7 @@
 import { 
   collection, 
   doc, 
+  getDoc,
   getDocs,
   setDoc, 
   updateDoc, 
@@ -106,6 +107,25 @@ export async function seedInitialRoomsIfEmpty(defaultRooms) {
   } catch (err) {
     console.warn('Initial rooms seed check warning:', err);
     return false;
+  }
+}
+
+/**
+ * Direct fetch of all room documents from Firestore (used for explicit resync)
+ */
+export async function fetchLatestRoomsFromFirestore() {
+  if (!isFirebaseConfigured() || !db) return null;
+  try {
+    const roomsCol = collection(db, 'rooms');
+    const snap = await getDocs(roomsCol);
+    if (snap.empty) return [];
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (err) {
+    console.error('Failed to fetch rooms from Firestore:', err);
+    return null;
   }
 }
 
@@ -224,14 +244,53 @@ export async function syncPropertySpaceToFirestore(spaceId, spaceData) {
   if (!isFirebaseConfigured() || !db) return false;
   try {
     const spaceDoc = doc(db, 'property_spaces', spaceId);
+    const cleanData = JSON.parse(JSON.stringify(spaceData));
     await setDoc(spaceDoc, {
-      ...spaceData,
+      ...cleanData,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     return true;
   } catch (err) {
     console.error(`Failed to sync space ${spaceId} to Firestore:`, err);
     return false;
+  }
+}
+
+export async function seedInitialSpacesIfEmpty(defaultSpaces) {
+  if (!isFirebaseConfigured() || !db) return false;
+  try {
+    const spacesCol = collection(db, 'property_spaces');
+    const existing = await getDocs(spacesCol);
+    if (existing.empty && Array.isArray(defaultSpaces)) {
+      console.log('Seeding default property spaces to Cloud Firestore...');
+      for (const space of defaultSpaces) {
+        const clean = JSON.parse(JSON.stringify(space));
+        await setDoc(doc(db, 'property_spaces', space.id), {
+          ...clean,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('Initial spaces seed check warning:', err);
+    return false;
+  }
+}
+
+export async function fetchLatestSpacesFromFirestore() {
+  if (!isFirebaseConfigured() || !db) return null;
+  try {
+    const spacesCol = collection(db, 'property_spaces');
+    const snap = await getDocs(spacesCol);
+    if (snap.empty) return [];
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (err) {
+    console.error('Failed to fetch property spaces from Firestore:', err);
+    return null;
   }
 }
 
@@ -263,14 +322,51 @@ export async function syncHeroSlidesToFirestore(slides) {
   if (!isFirebaseConfigured() || !db) return false;
   try {
     const heroDoc = doc(db, 'site_content', 'hero_slides');
+    const cleanSlides = JSON.parse(JSON.stringify(slides));
     await setDoc(heroDoc, {
-      slides,
+      slides: cleanSlides,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     return true;
   } catch (err) {
     console.error('Failed to sync hero slides to Firestore:', err);
     return false;
+  }
+}
+
+export async function seedInitialHeroIfEmpty(defaultSlides) {
+  if (!isFirebaseConfigured() || !db) return false;
+  try {
+    const heroDoc = doc(db, 'site_content', 'hero_slides');
+    const existing = await getDoc(heroDoc);
+    if (!existing.exists() && Array.isArray(defaultSlides)) {
+      console.log('Seeding default hero slides to Cloud Firestore...');
+      const cleanSlides = JSON.parse(JSON.stringify(defaultSlides));
+      await setDoc(heroDoc, {
+        slides: cleanSlides,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+    return true;
+  } catch (err) {
+    console.warn('Initial hero slides seed check warning:', err);
+    return false;
+  }
+}
+
+export async function fetchLatestHeroFromFirestore() {
+  if (!isFirebaseConfigured() || !db) return null;
+  try {
+    const heroDoc = doc(db, 'site_content', 'hero_slides');
+    const snap = await getDoc(heroDoc);
+    if (snap.exists()) {
+      const data = snap.data();
+      return Array.isArray(data.slides) ? data.slides : [];
+    }
+    return [];
+  } catch (err) {
+    console.error('Failed to fetch hero slides from Firestore:', err);
+    return null;
   }
 }
 

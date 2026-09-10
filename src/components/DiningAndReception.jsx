@@ -7,52 +7,41 @@ export default function DiningAndReception() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'dining' | 'lounge'
 
-  // Gather all provided authentic images from propertySpaces
+  // Gather all provided authentic images dynamically from propertySpaces
   const diningSpace = (propertySpaces || []).find(s => s.id === 'dining_hall');
   const loungeSpace = (propertySpaces || []).find(s => s.id === 'reception_lounge');
 
-  // Defined list of photos with clean, minimal labels
-  const rawPhotos = [
-    {
-      src: '/images/dining_hall_buffet.jpg',
-      title: 'Mountain Dining Hall & Buffet',
-      category: 'dining'
-    },
-    {
-      src: '/images/dining_hall_interior.jpg',
-      title: 'Dining Pavilion Interior & Banquet',
-      category: 'dining'
-    },
-    {
-      src: '/images/reception_lounge_sunset.jpg',
-      title: 'Sunset Lounge & Reception Area',
-      category: 'lounge'
-    },
-    {
-      src: '/images/dining_reception_exterior.jpg',
-      title: 'Wooden Pavilion Exterior & Entrance',
-      category: 'dining'
-    }
+  // Authentic fallback defaults if propertySpaces is initializing
+  const defaultDining = [
+    '/images/dining_hall_buffet.jpg',
+    '/images/dining_hall_interior.jpg',
+    '/images/dining_reception_exterior.jpg'
+  ];
+  const defaultLounge = [
+    '/images/reception_lounge_sunset.jpg'
   ];
 
-  // Also include any extra custom photos uploaded by the admin from propertySpaces (ignoring any AI photo)
-  const extraDiningImages = (diningSpace?.images || []).filter(
-    url => !url.includes('dining_hall_main') && !rawPhotos.some(p => p.src === url)
-  ).map(url => ({
-    src: url,
-    title: 'Dining Hall Space',
+  const diningImages = (Array.isArray(diningSpace?.images) && diningSpace.images.length > 0)
+    ? diningSpace.images
+    : defaultDining;
+
+  const loungeImages = (Array.isArray(loungeSpace?.images) && loungeSpace.images.length > 0)
+    ? loungeSpace.images
+    : defaultLounge;
+
+  const diningPhotos = diningImages.map((src, idx) => ({
+    src,
+    title: idx === 0 ? (diningSpace?.name || 'Mountain Dining Hall & Buffet') : `Dining Space ${idx + 1}`,
     category: 'dining'
   }));
 
-  const extraLoungeImages = (loungeSpace?.images || []).filter(
-    url => !url.includes('dining_hall_main') && !rawPhotos.some(p => p.src === url)
-  ).map(url => ({
-    src: url,
-    title: 'Sunset Lounge Space',
+  const loungePhotos = loungeImages.map((src, idx) => ({
+    src,
+    title: idx === 0 ? (loungeSpace?.name || 'Sunset Lounge & Reception Area') : `Sunset Lounge ${idx + 1}`,
     category: 'lounge'
   }));
 
-  const allPhotos = [...rawPhotos, ...extraDiningImages, ...extraLoungeImages];
+  const allPhotos = [...diningPhotos, ...loungePhotos];
 
   const filteredPhotos = activeFilter === 'all'
     ? allPhotos

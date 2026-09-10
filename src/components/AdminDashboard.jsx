@@ -56,6 +56,9 @@ import { getRazorpayKey, setRazorpayKeyOverride, isRazorpayLive } from '../servi
 export default function AdminDashboard({ onBackToSite }) {
   const { 
     isFirebaseActive,
+    firestoreSyncStatus,
+    lastCloudSync,
+    forceCloudResync,
     rooms, 
     setRooms,
     addNewRoom,
@@ -136,6 +139,10 @@ export default function AdminDashboard({ onBackToSite }) {
   const [totalUnitsDraft, setTotalUnitsDraft] = useState(selectedRoom?.totalUnits || 5);
   const [unitLabelDraft, setUnitLabelDraft] = useState(selectedRoom?.unitLabel || 'Units');
   const [pricingSaved, setPricingSaved] = useState(false);
+  const [isSavingPricing, setIsSavingPricing] = useState(false);
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [isSavingSpace, setIsSavingSpace] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
 
   // Space Specifications Draft
   const [spaceSpecsDraft, setSpaceSpecsDraft] = useState('');
@@ -317,14 +324,15 @@ export default function AdminDashboard({ onBackToSite }) {
   // Explicit "Update" Action Handlers
   // -------------------------------------------------------------
   // 1. Update Room Pricing, Offers & Inventory Capacity
-  const handleUpdatePricing = (e) => {
+  const handleUpdatePricing = async (e) => {
     e?.preventDefault();
     if (!selectedRoom) return;
+    setIsSavingPricing(true);
     const parsedPrice = parseInt(priceDraft, 10);
     const parsedDiscount = Math.min(90, Math.max(0, parseInt(discountDraft, 10) || 0));
-    const parsedTotalUnits = Math.max(1, parseInt(totalUnitsDraft, 10) || 6);
+    const parsedTotalUnits = Math.max(1, parseInt(totalUnitsDraft, 10) || 5);
 
-    updateRoom(selectedRoom.id, {
+    const res = await updateRoom(selectedRoom.id, {
       price: !isNaN(parsedPrice) && parsedPrice >= 0 ? parsedPrice : selectedRoom.price,
       discount: parsedDiscount,
       offer: offerDraft.trim(),
@@ -334,21 +342,28 @@ export default function AdminDashboard({ onBackToSite }) {
       unitLabel: unitLabelDraft.trim() || selectedRoom.unitLabel || 'Units'
     });
 
+    setIsSavingPricing(false);
     setPricingSaved(true);
     setTimeout(() => setPricingSaved(false), 2500);
-    showToast(`✅ Successfully updated pricing, color tag & inventory (${parsedTotalUnits} units) for ${selectedRoom.name}! Live website synchronized.`);
+
+    if (res?.success) {
+      showToast(`✅ Pricing & inventory (${parsedTotalUnits} units) saved & synced to Cloud Firestore!`);
+    } else {
+      showToast(`⚠️ Saved to local cache, cloud sync warning: ${res?.error || 'Offline mode'}`);
+    }
   };
 
   // 2. Update Room Details & Amenities
-  const handleUpdateDetails = (e) => {
+  const handleUpdateDetails = async (e) => {
     e?.preventDefault();
     if (!selectedRoom) return;
+    setIsSavingDetails(true);
     const parsedAmenities = amenitiesDraft
       .split(',')
       .map(a => a.trim())
       .filter(Boolean);
 
-    updateRoom(selectedRoom.id, {
+    const res = await updateRoom(selectedRoom.id, {
       name: nameDraft.trim() || selectedRoom.name,
       tagline: taglineDraft.trim(),
       size: sizeDraft.trim() || selectedRoom.size || '224 sq. ft.',
@@ -359,9 +374,15 @@ export default function AdminDashboard({ onBackToSite }) {
       amenities: parsedAmenities.length > 0 ? parsedAmenities : (selectedRoom.amenities || [])
     });
 
+    setIsSavingDetails(false);
     setDetailsSaved(true);
     setTimeout(() => setDetailsSaved(false), 2500);
-    showToast(`✅ Successfully updated room details & amenities for ${selectedRoom.name}! Live website synchronized.`);
+
+    if (res?.success) {
+      showToast(`✅ Room details for ${selectedRoom.name} saved & synced to Cloud Firestore!`);
+    } else {
+      showToast(`⚠️ Saved to local cache, cloud sync warning: ${res?.error || 'Offline mode'}`);
+    }
   };
 
   // 2b. Add a New Room Category
@@ -472,15 +493,16 @@ export default function AdminDashboard({ onBackToSite }) {
   };
 
   // 5. Update Dining Hall or Reception Space Details
-  const handleUpdateSpaceDetails = (e) => {
+  const handleUpdateSpaceDetails = async (e) => {
     e?.preventDefault();
     if (!selectedSpace) return;
+    setIsSavingSpace(true);
     const parsedFeatures = spaceFeaturesDraft
       .split(',')
       .map(f => f.trim())
       .filter(Boolean);
 
-    updatePropertySpace(selectedSpace.id, {
+    const res = await updatePropertySpace(selectedSpace.id, {
       name: spaceTitleDraft.trim() || selectedSpace.name,
       subtitle: spaceSubtitleDraft.trim(),
       timings: spaceTimingsDraft.trim(),
@@ -488,9 +510,15 @@ export default function AdminDashboard({ onBackToSite }) {
       features: parsedFeatures
     });
 
+    setIsSavingSpace(false);
     setSpaceSaved(true);
     setTimeout(() => setSpaceSaved(false), 2500);
-    showToast(`✅ Successfully updated ${selectedSpace.name} details! Live website synchronized.`);
+
+    if (res?.success) {
+      showToast(`✅ Successfully updated & synced ${selectedSpace.name} to Cloud Firestore!`);
+    } else {
+      showToast(`⚠️ Saved to local cache, cloud sync warning: ${res?.error || 'Offline mode'}`);
+    }
   };
 
   // 6. Remove a Space Image (Dining Hall / Reception)
@@ -1270,18 +1298,47 @@ export default function AdminDashboard({ onBackToSite }) {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Real-Time Cloud Firestore Sync Indicator & Action */}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white shadow-xs text-xs font-semibold">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${
+                      firestoreSyncStatus === 'connected'
+                        ? 'bg-emerald-500 animate-pulse'
+                        : firestoreSyncStatus === 'syncing'
+                        ? 'bg-amber-500 animate-spin'
+                        : 'bg-rose-500'
+                    }`} />
+                    <span className="text-[0.68rem] text-slate-700 font-bold uppercase tracking-wider">
+                      {firestoreSyncStatus === 'connected' ? 'Firestore Live' : firestoreSyncStatus === 'syncing' ? 'Syncing...' : 'Local Cache'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isResyncing}
+                      onClick={async () => {
+                        setIsResyncing(true);
+                        const r = await forceCloudResync();
+                        setIsResyncing(false);
+                        if (r?.success) showToast('✅ All rooms, spaces & content re-synchronized from Cloud Firestore!');
+                        else showToast('⚠️ Re-sync error: ' + (r?.error || 'Offline'));
+                      }}
+                      title="Force Re-sync with Cloud Firestore"
+                      className="ml-1 p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-amber-600 transition-colors"
+                    >
+                      <RefreshCw size={12} className={isResyncing ? 'animate-spin text-amber-600' : ''} />
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => { setSelectedTarget(rooms[0]?.id); setActiveNav('config'); }}
-                    className="pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2.5 px-3.5 shadow-sm"
+                    className="pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2 px-3 shadow-sm"
                   >
                     <Sliders size={14} className="shrink-0" /> <span>Rooms & Rates</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSelectedTarget('dining_hall'); setActiveNav('config'); }}
-                    className="pms-btn pms-btn-secondary text-xs uppercase tracking-wider py-2.5 px-3.5 shadow-sm"
+                    className="pms-btn pms-btn-secondary text-xs uppercase tracking-wider py-2 px-3 shadow-sm"
                   >
                     <Utensils size={14} className="shrink-0" /> <span>Dining & Lounge</span>
                   </button>
@@ -2113,9 +2170,14 @@ export default function AdminDashboard({ onBackToSite }) {
                       <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                         <button
                           type="submit"
-                          className="w-full sm:w-auto pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 px-6 shadow-sm justify-center"
+                          disabled={isSavingPricing}
+                          className="w-full sm:w-auto pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 px-6 shadow-sm justify-center disabled:opacity-60"
                         >
-                          {pricingSaved ? (
+                          {isSavingPricing ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin text-amber-300" /> SYNCING WITH CLOUD...
+                            </>
+                          ) : pricingSaved ? (
                             <>
                               <Check size={16} className="text-emerald-400" /> UPDATED & PUBLISHED!
                             </>
@@ -2442,9 +2504,14 @@ export default function AdminDashboard({ onBackToSite }) {
                       <div className="pt-3 border-t border-slate-100 space-y-2.5">
                         <button
                           type="submit"
-                          className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 shadow"
+                          disabled={isSavingDetails}
+                          className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 shadow disabled:opacity-60"
                         >
-                          {detailsSaved ? (
+                          {isSavingDetails ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin text-amber-300" /> SYNCING WITH CLOUD...
+                            </>
+                          ) : detailsSaved ? (
                             <>
                               <Check size={16} className="text-emerald-400" /> ROOM DETAILS UPDATED!
                             </>
@@ -2763,9 +2830,14 @@ export default function AdminDashboard({ onBackToSite }) {
                       <div className="pt-3 border-t border-slate-100">
                         <button
                           type="submit"
-                          className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 shadow"
+                          disabled={isSavingSpace}
+                          className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 shadow disabled:opacity-60"
                         >
-                          {spaceSaved ? (
+                          {isSavingSpace ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin text-amber-300" /> SYNCING WITH CLOUD...
+                            </>
+                          ) : spaceSaved ? (
                             <>
                               <Check size={16} className="text-emerald-400" /> SPACE DETAILS UPDATED!
                             </>
