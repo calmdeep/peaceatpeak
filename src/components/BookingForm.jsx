@@ -278,6 +278,9 @@ export default function BookingForm({ preselectedRoomId }) {
         },
         onDismiss: () => {
           setIsProcessingPayment(false);
+        },
+        onError: (err) => {
+          setIsProcessingPayment(false);
         }
       });
     } catch (err) {

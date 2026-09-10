@@ -1,13 +1,16 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // Dev middleware to run serverless API functions during local development
-function apiMiddlewarePlugin() {
+function apiMiddlewarePlugin(env) {
+  // Ensure loaded environment variables are in process.env for serverless handlers
+  Object.assign(process.env, env);
+
   return {
     name: 'api-serverless-middleware',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (req.url && (req.url.startsWith('/api/send-whatsapp') || req.url.startsWith('/api/create-razorpay-order'))) {
+        if (req.url && req.url.startsWith('/api/')) {
           try {
             const endpoint = req.url.split('?')[0].replace('/api/', '');
             const modulePath = `./api/${endpoint}.js`;
@@ -58,10 +61,14 @@ function apiMiddlewarePlugin() {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react(), apiMiddlewarePlugin()],
-  server: {
-    port: 3000,
-    host: true
-  }
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
+    plugins: [react(), apiMiddlewarePlugin(env)],
+    server: {
+      port: 3000,
+      host: true
+    }
+  };
 })
+
