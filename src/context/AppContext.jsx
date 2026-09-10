@@ -3,6 +3,7 @@ import { isFirebaseConfigured } from '../firebase';
 import {
   subscribeToRooms,
   syncRoomToFirestore,
+  deleteRoomFromFirestore,
   seedInitialRoomsIfEmpty,
   subscribeToBookings,
   syncBookingToFirestore,
@@ -196,12 +197,14 @@ export function AppProvider({ children }) {
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map(r => ({
             ...r,
-            totalUnits: (r.id === 'private_cottage' || r.id === 'swiss_tent') && (r.totalUnits === 6 || !r.totalUnits) 
-              ? 5 
-              : (Number(r.totalUnits) || (r.id === 'family_tent' ? 4 : 5)),
-            unitLabel: r.unitLabel || (r.id === 'private_cottage' ? 'Wooden Cottages' : r.id === 'swiss_tent' ? 'Swiss Tents' : 'Family Suites'),
-            tagColor: r.tagColor || (r.id === 'private_cottage' ? 'gold' : r.id === 'swiss_tent' ? 'emerald' : 'blue'),
-            image: (r.image && !r.image.includes('swiss1.avif')) ? r.image : (r.id === 'swiss_tent' ? '/images/room_tent.jpg' : r.image),
+            price: Number(r.price) >= 0 ? Number(r.price) : 4500,
+            originalPrice: Number(r.originalPrice) || Number(r.price) || 4500,
+            totalUnits: Number(r.totalUnits) >= 1 ? Number(r.totalUnits) : 5,
+            unitLabel: r.unitLabel || `${r.name || 'Sanctuary'} Units`,
+            tagColor: r.tagColor || 'gold',
+            amenities: Array.isArray(r.amenities) ? r.amenities : [],
+            size: r.size || '224 sq. ft.',
+            image: (r.image && !r.image.includes('swiss1.avif')) ? r.image : (r.id === 'swiss_tent' ? '/images/room_tent.jpg' : (r.image || '/images/hut1.webp')),
             images: (r.images || []).map(img => img.includes('swiss1.avif') ? '/images/room_tent.jpg' : img),
             currentGuest: r.currentGuest && r.currentGuest.name?.includes('Malhotra') ? null : r.currentGuest,
             available: r.available !== false
@@ -394,13 +397,13 @@ export function AppProvider({ children }) {
     const unsubRooms = subscribeToRooms((cloudRooms) => {
       if (Array.isArray(cloudRooms) && cloudRooms.length > 0) {
         setRooms(prev => {
-          return prev.map(currentRoom => {
-            const match = cloudRooms.find(cr => cr.id === currentRoom.id);
-            if (!match) return currentRoom;
+          const prevMap = new Map(prev.map(currentRoom => [currentRoom.id, currentRoom]));
+          const merged = cloudRooms.map(match => {
+            const currentRoom = prevMap.get(match.id);
+            if (!currentRoom) return match;
 
             const cloudTime = new Date(match.updatedAt || 0).getTime();
             const localTime = new Date(currentRoom.updatedAt || 0).getTime();
-            // If local state has a newer active edit or pending write, don't revert to stale cloud snapshot!
             if (localTime > cloudTime) {
               return currentRoom;
             }
@@ -412,6 +415,18 @@ export function AppProvider({ children }) {
               image: match.image || (Array.isArray(match.images) && match.images[0]) || currentRoom.image
             };
           });
+
+          // Retain any newly created local room not yet synced to cloud
+          prev.forEach(r => {
+            if (!merged.find(m => m.id === r.id)) {
+              const localTime = new Date(r.updatedAt || 0).getTime();
+              if (Date.now() - localTime < 60000) {
+                merged.push(r);
+              }
+            }
+          });
+
+          return merged;
         });
       }
     });
@@ -506,6 +521,53 @@ export function AppProvider({ children }) {
   };
 
   // Rooms Management
+  const addNewRoom = (newRoomData) => {
+    const now = new Date().toISOString();
+    const id = newRoomData.id || `sanctuary_${Date.now()}`;
+    const cleanRoom = {
+      id,
+      name: newRoomData.name || 'New Sanctuary Suite',
+      totalUnits: Number(newRoomData.totalUnits) >= 1 ? Number(newRoomData.totalUnits) : 5,
+      unitLabel: newRoomData.unitLabel || `${newRoomData.name || 'Room'} Units`,
+      image: newRoomData.image || (Array.isArray(newRoomData.images) && newRoomData.images[0]) || '/images/hut1.webp',
+      images: Array.isArray(newRoomData.images) && newRoomData.images.length > 0 ? newRoomData.images : ['/images/hut1.webp'],
+      size: newRoomData.size || '224 sq. ft.',
+      bed: newRoomData.bed || '1 King Bed',
+      guests: newRoomData.guests || '2 Adults',
+      view: newRoomData.view || 'Himalayan Mountain View',
+      price: Number(newRoomData.price) >= 0 ? Number(newRoomData.price) : 4500,
+      originalPrice: Number(newRoomData.originalPrice) || Number(newRoomData.price) || 4500,
+      discount: Math.min(90, Math.max(0, Number(newRoomData.discount) || 0)),
+      offer: newRoomData.offer || '',
+      available: newRoomData.available !== false,
+      status: 'available',
+      currentGuest: null,
+      tagline: newRoomData.tagline || 'Experience serene mountain luxury.',
+      description: newRoomData.description || 'Constructed with natural pine wood and panoramic mountain vistas.',
+      amenities: Array.isArray(newRoomData.amenities) && newRoomData.amenities.length > 0 
+        ? newRoomData.amenities 
+        : ['Mountain View Balcony', 'High-speed Wi-Fi', 'Electric Room Heater', 'Attached Luxury Bathroom'],
+      tagColor: newRoomData.tagColor || 'gold',
+      tag: newRoomData.tag || 'NEW SANCTUARY',
+      updatedAt: now
+    };
+
+    setRooms(prev => {
+      const next = [...prev, cleanRoom];
+      setTimeout(() => syncRoomToFirestore(cleanRoom.id, cleanRoom), 0);
+      return next;
+    });
+    return cleanRoom;
+  };
+
+  const deleteRoom = (roomId) => {
+    setRooms(prev => {
+      const next = prev.filter(room => room.id !== roomId);
+      setTimeout(() => deleteRoomFromFirestore(roomId), 0);
+      return next;
+    });
+  };
+
   const updateRoom = (roomId, updates) => {
     const now = new Date().toISOString();
     setRooms(prev => {
@@ -902,7 +964,7 @@ export function AppProvider({ children }) {
       };
     }
 
-    const totalUnits = Number(room.totalUnits) || (room.id === 'family_tent' ? 4 : 5);
+    const totalUnits = Number(room.totalUnits) >= 1 ? Number(room.totalUnits) : 5;
 
     if (room.available === false) {
       return {
@@ -970,6 +1032,8 @@ export function AppProvider({ children }) {
         isFirebaseActive: isFirebaseConfigured(),
         rooms,
         setRooms,
+        addNewRoom,
+        deleteRoom,
         updateRoom,
         addRoomImage,
         replaceRoomImage,

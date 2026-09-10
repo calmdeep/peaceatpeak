@@ -74,6 +74,21 @@ export async function syncRoomToFirestore(roomId, roomData) {
 }
 
 /**
+ * Deletes a room document from Firestore
+ */
+export async function deleteRoomFromFirestore(roomId) {
+  if (!isFirebaseConfigured() || !db) return false;
+  try {
+    const roomDoc = doc(db, 'rooms', roomId);
+    await deleteDoc(roomDoc);
+    return true;
+  } catch (err) {
+    console.error(`Failed to delete room ${roomId} from Firestore:`, err);
+    return false;
+  }
+}
+
+/**
  * Batch seed default rooms if Firestore is empty on initial setup
  */
 export async function seedInitialRoomsIfEmpty(defaultRooms) {

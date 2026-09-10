@@ -56,9 +56,9 @@ export default function BookingForm({ preselectedRoomId }) {
   const selectedRoom = rooms.find(r => r.id === formData.roomId) || rooms[0] || {};
   const currentInv = getRoomInventory
     ? getRoomInventory(formData.roomId, formData.checkIn, formData.checkOut)
-    : { totalUnits: 6, availableUnits: 6, occupiedUnits: 0 };
+    : { totalUnits: Number(selectedRoom.totalUnits) || 5, availableUnits: Number(selectedRoom.totalUnits) || 5, occupiedUnits: 0 };
   const isRoomAvailable = selectedRoom.available !== false && currentInv.availableUnits > 0;
-  const effectiveRate = getEffectivePrice ? getEffectivePrice(selectedRoom) : (selectedRoom.price || 4500);
+  const effectiveRate = getEffectivePrice ? getEffectivePrice(selectedRoom) : (Number(selectedRoom.price) || 0);
 
   const [bookingSummary, setBookingSummary] = useState({
     nights: 1,
@@ -178,7 +178,7 @@ export default function BookingForm({ preselectedRoomId }) {
     const diffNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     const currentRoom = rooms.find(r => r.id === formData.roomId) || rooms[0] || {};
-    const roomRate = getEffectivePrice ? getEffectivePrice(currentRoom) : (currentRoom.price || 4500);
+    const roomRate = getEffectivePrice ? getEffectivePrice(currentRoom) : (Number(currentRoom.price) || 0);
     const basePrice = roomRate * diffNights;
     const tax = Math.round(basePrice * 0.12);
     const total = basePrice + tax;
@@ -709,9 +709,9 @@ export default function BookingForm({ preselectedRoomId }) {
                   {rooms.map(room => {
                     const inv = getRoomInventory
                       ? getRoomInventory(room.id, formData.checkIn, formData.checkOut)
-                      : { totalUnits: 6, availableUnits: 6, occupiedUnits: 0 };
+                      : { totalUnits: Number(room.totalUnits) || 5, availableUnits: Number(room.totalUnits) || 5, occupiedUnits: 0 };
                     const roomAvail = room.available !== false && inv.availableUnits > 0;
-                    const effPrice = getEffectivePrice ? getEffectivePrice(room) : (room.price || 4500);
+                    const effPrice = getEffectivePrice ? getEffectivePrice(room) : (Number(room.price) || 0);
                     return (
                       <option key={room.id} value={room.id} disabled={!roomAvail}>
                         {room.name} {!roomAvail ? '— [SOLD OUT]' : `— ₹${effPrice.toLocaleString()}/night (${inv.availableUnits} of ${inv.totalUnits} Available)`}

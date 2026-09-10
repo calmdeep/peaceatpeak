@@ -58,6 +58,8 @@ export default function AdminDashboard({ onBackToSite }) {
     isFirebaseActive,
     rooms, 
     setRooms,
+    addNewRoom,
+    deleteRoom,
     updateRoom, 
     addRoomImage, 
     replaceRoomImage,
@@ -212,11 +214,34 @@ export default function AdminDashboard({ onBackToSite }) {
   // Room Specifications Draft
   const [nameDraft, setNameDraft] = useState(selectedRoom?.name || '');
   const [taglineDraft, setTaglineDraft] = useState(selectedRoom?.tagline || '');
+  const [sizeDraft, setSizeDraft] = useState(selectedRoom?.size || '');
   const [bedDraft, setBedDraft] = useState(selectedRoom?.bed || '');
   const [guestsDraft, setGuestsDraft] = useState(selectedRoom?.guests || '');
   const [viewDraft, setViewDraft] = useState(selectedRoom?.view || '');
   const [descDraft, setDescDraft] = useState(selectedRoom?.description || '');
+  const [amenitiesDraft, setAmenitiesDraft] = useState((selectedRoom?.amenities || []).join(', '));
   const [detailsSaved, setDetailsSaved] = useState(false);
+
+  // New Room Creation Modal State
+  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
+  const [newRoomForm, setNewRoomForm] = useState({
+    name: '',
+    price: 4500,
+    discount: 0,
+    offer: '',
+    tag: 'EXCLUSIVE',
+    tagColor: 'gold',
+    totalUnits: 5,
+    unitLabel: 'Units',
+    size: '224 sq. ft.',
+    bed: '1 King Bed',
+    guests: '2 Adults',
+    view: 'Himalayan Mountain Range',
+    tagline: 'Peaceful luxury sanctuary facing snow peaks.',
+    description: 'Constructed with natural pine wood and glass windows overlooking the snow-capped Himalayan peaks.',
+    amenities: 'Private Wooden Balcony, High-speed Wi-Fi, Electric Room Heater, Attached Luxury Bathroom',
+    image: '/images/hut1.webp'
+  });
 
   // Availability Draft
   const [availabilityDraft, setAvailabilityDraft] = useState(selectedRoom?.available !== false);
@@ -255,16 +280,18 @@ export default function AdminDashboard({ onBackToSite }) {
       setDiscountDraft(selectedRoom.discount || 0);
       setOfferDraft(selectedRoom.offer || '');
       setTagDraft(selectedRoom.tag || '');
-      setTagColorDraft(selectedRoom.tagColor || (selectedRoom.id === 'private_cottage' ? 'gold' : selectedRoom.id === 'swiss_tent' ? 'emerald' : 'blue'));
-      setTotalUnitsDraft(selectedRoom.totalUnits || (selectedRoom.id === 'family_tent' ? 4 : 5));
-      setUnitLabelDraft(selectedRoom.unitLabel || (selectedRoom.id === 'private_cottage' ? 'Wooden Cottages' : selectedRoom.id === 'swiss_tent' ? 'Swiss Tents' : 'Family Suites'));
+      setTagColorDraft(selectedRoom.tagColor || 'gold');
+      setTotalUnitsDraft(selectedRoom.totalUnits || 5);
+      setUnitLabelDraft(selectedRoom.unitLabel || 'Units');
 
       setNameDraft(selectedRoom.name || '');
       setTaglineDraft(selectedRoom.tagline || '');
+      setSizeDraft(selectedRoom.size || '224 sq. ft.');
       setBedDraft(selectedRoom.bed || '');
       setGuestsDraft(selectedRoom.guests || '');
       setViewDraft(selectedRoom.view || '');
       setDescDraft(selectedRoom.description || '');
+      setAmenitiesDraft((selectedRoom.amenities || []).join(', '));
 
       setAvailabilityDraft(selectedRoom.available !== false);
     }
@@ -312,22 +339,90 @@ export default function AdminDashboard({ onBackToSite }) {
     showToast(`✅ Successfully updated pricing, color tag & inventory (${parsedTotalUnits} units) for ${selectedRoom.name}! Live website synchronized.`);
   };
 
-  // 2. Update Room Details
+  // 2. Update Room Details & Amenities
   const handleUpdateDetails = (e) => {
     e?.preventDefault();
     if (!selectedRoom) return;
+    const parsedAmenities = amenitiesDraft
+      .split(',')
+      .map(a => a.trim())
+      .filter(Boolean);
+
     updateRoom(selectedRoom.id, {
       name: nameDraft.trim() || selectedRoom.name,
       tagline: taglineDraft.trim(),
+      size: sizeDraft.trim() || selectedRoom.size || '224 sq. ft.',
       bed: bedDraft.trim(),
       guests: guestsDraft.trim(),
       view: viewDraft.trim(),
-      description: descDraft.trim()
+      description: descDraft.trim(),
+      amenities: parsedAmenities.length > 0 ? parsedAmenities : (selectedRoom.amenities || [])
     });
 
     setDetailsSaved(true);
     setTimeout(() => setDetailsSaved(false), 2500);
-    showToast(`✅ Successfully updated room details for ${selectedRoom.name}! Live website synchronized.`);
+    showToast(`✅ Successfully updated room details & amenities for ${selectedRoom.name}! Live website synchronized.`);
+  };
+
+  // 2b. Add a New Room Category
+  const handleCreateNewRoom = (e) => {
+    e?.preventDefault();
+    if (!newRoomForm.name.trim()) {
+      alert('Please enter a room name.');
+      return;
+    }
+    const parsedAmenities = newRoomForm.amenities
+      .split(',')
+      .map(a => a.trim())
+      .filter(Boolean);
+
+    const created = addNewRoom({
+      ...newRoomForm,
+      price: Number(newRoomForm.price) || 4500,
+      discount: Number(newRoomForm.discount) || 0,
+      totalUnits: Number(newRoomForm.totalUnits) || 5,
+      amenities: parsedAmenities
+    });
+
+    setShowAddRoomModal(false);
+    setSelectedTarget(created.id);
+    showToast(`🎉 New Sanctuary "${created.name}" created and published to live website!`);
+    // Reset form
+    setNewRoomForm({
+      name: '',
+      price: 4500,
+      discount: 0,
+      offer: '',
+      tag: 'EXCLUSIVE',
+      tagColor: 'gold',
+      totalUnits: 5,
+      unitLabel: 'Units',
+      size: '224 sq. ft.',
+      bed: '1 King Bed',
+      guests: '2 Adults',
+      view: 'Himalayan Mountain Range',
+      tagline: 'Peaceful luxury sanctuary facing snow peaks.',
+      description: 'Constructed with natural pine wood and glass windows overlooking the snow-capped Himalayan peaks.',
+      amenities: 'Private Wooden Balcony, High-speed Wi-Fi, Electric Room Heater, Attached Luxury Bathroom',
+      image: '/images/hut1.webp'
+    });
+  };
+
+  // 2c. Delete a Room Category
+  const handleDeleteRoom = (roomId, roomName) => {
+    if (rooms.length <= 1) {
+      alert('You must keep at least one room category active.');
+      return;
+    }
+    const confirmed = window.confirm(`Are you sure you want to permanently delete "${roomName}"? This will remove it from the live website.`);
+    if (!confirmed) return;
+
+    deleteRoom(roomId);
+    const remainingRooms = rooms.filter(r => r.id !== roomId);
+    if (remainingRooms.length > 0) {
+      setSelectedTarget(remainingRooms[0].id);
+    }
+    showToast(`🗑️ "${roomName}" has been permanently removed.`);
   };
 
   // 3. Update Room Availability
@@ -1720,6 +1815,17 @@ export default function AdminDashboard({ onBackToSite }) {
                   </button>
                 ))}
 
+                {/* Add New Room Category Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowAddRoomModal(true)}
+                  className="shrink-0 px-3 py-2.5 rounded-lg text-xs uppercase font-bold tracking-wider flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all active:scale-95"
+                  title="Create a new room type or sanctuary"
+                >
+                  <Plus size={15} />
+                  <span>+ Add Sanctuary</span>
+                </button>
+
                 {/* Dining Hall & Reception Lounge Targets */}
                 {(propertySpaces || []).map(space => {
                   const isDining = space.id === 'dining_hall';
@@ -2259,6 +2365,16 @@ export default function AdminDashboard({ onBackToSite }) {
 
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
+                          <label className="pms-label">Room Size / Area</label>
+                          <input
+                            type="text"
+                            value={sizeDraft}
+                            onChange={(e) => setSizeDraft(e.target.value)}
+                            placeholder="e.g. 224 sq. ft."
+                            className="pms-input"
+                          />
+                        </div>
+                        <div className="space-y-1">
                           <label className="pms-label">Bedding</label>
                           <input
                             type="text"
@@ -2267,6 +2383,9 @@ export default function AdminDashboard({ onBackToSite }) {
                             className="pms-input"
                           />
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="pms-label">Guests</label>
                           <input
@@ -2276,22 +2395,43 @@ export default function AdminDashboard({ onBackToSite }) {
                             className="pms-input"
                           />
                         </div>
+                        <div className="space-y-1">
+                          <label className="pms-label">View Type</label>
+                          <input
+                            type="text"
+                            value={viewDraft}
+                            onChange={(e) => setViewDraft(e.target.value)}
+                            className="pms-input"
+                          />
+                        </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="pms-label">View Type</label>
+                      <div className="space-y-1.5">
+                        <label className="pms-label flex items-center justify-between">
+                          <span>Amenities & Credentials</span>
+                          <span className="text-[0.65rem] text-slate-400 font-normal">Separate with commas</span>
+                        </label>
                         <input
                           type="text"
-                          value={viewDraft}
-                          onChange={(e) => setViewDraft(e.target.value)}
-                          className="pms-input"
+                          value={amenitiesDraft}
+                          onChange={(e) => setAmenitiesDraft(e.target.value)}
+                          placeholder="Private Balcony, High-speed Wi-Fi, Electric Room Heater, Attached Luxury Bathroom"
+                          className="pms-input text-xs"
                         />
+                        {/* Live Badges Preview */}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {amenitiesDraft.split(',').map(a => a.trim()).filter(Boolean).map((amenity, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[0.68rem] bg-amber-50 text-amber-900 border border-amber-200">
+                              <Check size={10} className="text-amber-600" /> {amenity}
+                            </span>
+                          ))}
+                        </div>
                       </div>
 
                       <div className="space-y-1">
                         <label className="pms-label">Room Description</label>
                         <textarea
-                          rows={6}
+                          rows={5}
                           value={descDraft}
                           onChange={(e) => setDescDraft(e.target.value)}
                           className="pms-textarea"
@@ -2299,7 +2439,7 @@ export default function AdminDashboard({ onBackToSite }) {
                       </div>
 
                       {/* Explicit Update Button for Room Details */}
-                      <div className="pt-3 border-t border-slate-100">
+                      <div className="pt-3 border-t border-slate-100 space-y-2.5">
                         <button
                           type="submit"
                           className="w-full pms-btn pms-btn-primary text-xs uppercase tracking-wider py-3 shadow"
@@ -2310,10 +2450,21 @@ export default function AdminDashboard({ onBackToSite }) {
                             </>
                           ) : (
                             <>
-                              <Save size={16} /> UPDATE ROOM DETAILS
+                              <Save size={16} /> UPDATE ROOM DETAILS & AMENITIES
                             </>
                           )}
                         </button>
+
+                        {/* Delete Sanctuary Button (If more than 1 room exists) */}
+                        {rooms.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRoom(selectedRoom.id, selectedRoom.name)}
+                            className="w-full py-2.5 px-3 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-colors"
+                          >
+                            <Trash2 size={14} /> Delete This Sanctuary Category
+                          </button>
+                        )}
                       </div>
                     </form>
                   </div>
@@ -3522,6 +3673,209 @@ export default function AdminDashboard({ onBackToSite }) {
           )}
         </button>
       </nav>
+
+      {/* =========================================================================
+          GLOBAL ADD NEW SANCTUARY MODAL
+         ========================================================================= */}
+      {showAddRoomModal && (
+        <div 
+          className="pms-modal-overlay"
+          onClick={() => setShowAddRoomModal(false)}
+        >
+          <div 
+            className="pms-modal-dialog max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'var(--font-display)' }}>
+                  Add New Sanctuary Category
+                </h3>
+                <p className="text-xs text-slate-500">Create a new room type, define nightly price, units, amenities, and publish to website.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddRoomModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewRoom} className="space-y-4 text-left max-h-[75vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="pms-label">Sanctuary Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Royal Himalayan Wooden Chalet"
+                    value={newRoomForm.name}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Nightly Price (INR ₹) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    required
+                    placeholder="4500"
+                    value={newRoomForm.price}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, price: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Promotional Discount (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="90"
+                    placeholder="0"
+                    value={newRoomForm.discount}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, discount: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Total Units (Resort Inventory)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    required
+                    placeholder="5"
+                    value={newRoomForm.totalUnits}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, totalUnits: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Unit Label (Plural)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Wooden Chalets"
+                    value={newRoomForm.unitLabel}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, unitLabel: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Room Size / Area</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 240 sq. ft."
+                    value={newRoomForm.size}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, size: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Bedding Setup</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1 King Bed"
+                    value={newRoomForm.bed}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, bed: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">Guest Capacity</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 2 Adults"
+                    value={newRoomForm.guests}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, guests: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="pms-label">View Type</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Panoramic Mountain Range"
+                    value={newRoomForm.view}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, view: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="pms-label">Tagline</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Warm timber interior suspended above morning mountain mist."
+                    value={newRoomForm.tagline}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, tagline: e.target.value }))}
+                    className="pms-input"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="pms-label">Detailed Description</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Detailed overview highlighting interior craftsmanship, views and comfort..."
+                    value={newRoomForm.description}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, description: e.target.value }))}
+                    className="pms-textarea"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="pms-label">Amenities & Highlights (comma-separated)</label>
+                  <input
+                    type="text"
+                    placeholder="Private Balcony, High-speed Wi-Fi, Electric Room Heater, Attached Luxury Bathroom"
+                    value={newRoomForm.amenities}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, amenities: e.target.value }))}
+                    className="pms-input text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="pms-label">Primary Photo URL</label>
+                  <input
+                    type="text"
+                    placeholder="/images/hut1.webp or https://..."
+                    value={newRoomForm.image}
+                    onChange={e => setNewRoomForm(prev => ({ ...prev, image: e.target.value }))}
+                    className="pms-input text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRoomModal(false)}
+                  className="pms-btn pms-btn-ghost text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="pms-btn pms-btn-primary text-xs uppercase tracking-wider py-2.5 px-5 shadow"
+                >
+                  <Plus size={15} /> Create & Publish Sanctuary
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           GLOBAL MANUAL RESERVATION MODAL (CENTERED OVERLAY)
