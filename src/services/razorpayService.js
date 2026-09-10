@@ -183,11 +183,11 @@ export const initiateRazorpayPayment = async ({
     order_id: orderData.order_id,
     name: 'Peace at Peak Resort',
     description: `${roomName || 'Sanctuary Stay'} - #${bookingId || 'Booking'}`,
-    image: '/images/hut1.webp',
+    image: typeof window !== 'undefined' ? `${window.location.origin}/images/hut1.webp` : '/images/hut1.webp',
     prefill: {
       name: guestName || '',
       email: guestEmail || '',
-      contact: guestPhone || ''
+      contact: guestPhone ? guestPhone.toString().replace(/[^0-9]/g, '') : ''
     },
     notes: {
       bookingId: bookingId || '',
