@@ -81,7 +81,7 @@ export default function BookingForm({ preselectedRoomId }) {
     : Math.round(bookingSummary.total / 2);
   const balanceDue = bookingSummary.total - payableNow;
 
-  // Automatically generate high-res receipt image and dispatch to customer WhatsApp upon confirmation
+  // Automatically dispatch reservation confirmation directly to customer WhatsApp upon confirmation
   useEffect(() => {
     if (isSubmitted && bookingId && !autoSentWhatsApp) {
       setAutoSentWhatsApp(true);
@@ -107,49 +107,34 @@ export default function BookingForm({ preselectedRoomId }) {
         tax: bookingSummary.tax
       };
 
-      setIsGeneratingReceipt(true);
-
-      // 1. Immediately render high-res receipt locally on canvas
-      getReceiptImageBlob(currentBooking)
-        .then(async ({ dataUrl }) => {
-          setReceiptDataUrl(dataUrl);
-
-          // 2. Upload to Firebase Storage or Public CDN
-          let uploadedUrl = null;
-          try {
-            uploadedUrl = await generateAndUploadReceiptImage(currentBooking);
-          } catch (uploadErr) {
-            console.warn('Receipt upload notice:', uploadErr);
+      // 1. Immediately dispatch automated WhatsApp confirmation text directly to the guest's number
+      dispatchAutomatedWhatsAppReceipt(currentBooking)
+        .then(apiRes => {
+          if (apiRes?.success) {
+            setAutoSendStatus('sent');
+          } else {
+            setAutoSendStatus('failed');
           }
-
-          setIsGeneratingReceipt(false);
-          // Prefer permanent public URL, fallback directly to high-res dataUrl
-          const finalImageUrl = uploadedUrl || dataUrl;
-          if (finalImageUrl) {
-            setReceiptImageUrl(finalImageUrl);
-          }
-
-          // 3. Automatically dispatch image reservation voucher to customer's WhatsApp
-          dispatchAutomatedWhatsAppReceipt(currentBooking, finalImageUrl)
-            .then(apiRes => {
-              if (apiRes?.success) {
-                setAutoSendStatus('sent');
-              } else {
-                setAutoSendStatus('unconfigured');
-              }
-            })
-            .catch(() => setAutoSendStatus('unconfigured'));
-
-          // Also trigger webhook if configured
-          triggerWhatsAppWebhook({ ...currentBooking, receiptImageUrl: finalImageUrl });
         })
         .catch(err => {
-          console.warn('Receipt generation notice:', err);
-          setIsGeneratingReceipt(false);
-          dispatchAutomatedWhatsAppReceipt(currentBooking, null)
-            .then(apiRes => setAutoSendStatus(apiRes?.success ? 'sent' : 'unconfigured'))
-            .catch(() => setAutoSendStatus('unconfigured'));
+          console.warn('Auto WhatsApp dispatch error:', err);
+          setAutoSendStatus('failed');
         });
+
+      // 2. In parallel, render local canvas for on-screen receipt preview & download
+      setIsGeneratingReceipt(true);
+      getReceiptImageBlob(currentBooking)
+        .then(({ dataUrl }) => {
+          setReceiptDataUrl(dataUrl);
+          setIsGeneratingReceipt(false);
+        })
+        .catch(err => {
+          console.warn('Receipt canvas generation notice:', err);
+          setIsGeneratingReceipt(false);
+        });
+
+      // 3. Also trigger webhook if configured
+      triggerWhatsAppWebhook(currentBooking);
     }
   }, [isSubmitted, bookingId, formData, paymentResult, paymentOption, bookingSummary, selectedRoom, autoSentWhatsApp]);
 

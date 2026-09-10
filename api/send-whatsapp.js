@@ -175,76 +175,28 @@ export default async function handler(req, res) {
     const ultramsgToken = process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN || 'daoc6rj7zggjq828';
 
     if (ultramsgInstance && ultramsgToken) {
-      let imageSent = false;
       let textSent = false;
       let ultraResponseDetails = null;
 
-      // 1. Primary: If receipt image exists (HTTP URL or Base64 Data URL), send the image bill
-      if (receiptImageUrl && (receiptImageUrl.startsWith('http') || receiptImageUrl.startsWith('data:image/'))) {
-        try {
-          const isPaid = booking?.paymentStatus === 'paid' || booking?.paymentId;
-          const isAdvance = booking?.paymentStatus === 'advance_paid';
-          const paymentBadge = isPaid ? 'VERIFIED ONLINE' : (isAdvance ? '50% ADVANCE DEPOSIT' : 'PAY ON ARRIVAL');
+      // Send the detailed text voucher confirmation message directly to guest WhatsApp
+      const ultraTextRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          token: ultramsgToken,
+          to: cleanPhone,
+          body: message
+        })
+      });
+      const textData = await ultraTextRes.json();
+      textSent = Boolean(textData?.id || textData?.sent === 'true' || textData?.sent === true);
+      ultraResponseDetails = textData || ultraResponseDetails;
 
-          const imageCaption = [
-            '━━━━━━━━━━━━━━━━━━━━',
-            '✨ *RESERVATION CONFIRMED* ✨',
-            '*PEACE AT PEAK RESORT, KANATAL*',
-            '━━━━━━━━━━━━━━━━━━━━',
-            '',
-            `📋 *Booking ID:* ${booking?.id || 'PAP-CONFIRMED'}`,
-            `👤 *Lead Guest:* ${booking?.guestName || 'Valued Guest'}`,
-            `🏨 *Sanctuary:* ${booking?.roomName || 'Luxury Stay'}`,
-            `📅 *Stay Dates:* ${booking?.checkIn || ''} to ${booking?.checkOut || ''}`,
-            `💳 *Payment:* ₹${Number(booking?.paidAmount || booking?.amount || 0).toLocaleString('en-IN')} (${paymentBadge})`,
-            booking?.balanceAmount > 0 ? `💰 *Balance on Arrival:* ₹${Number(booking.balanceAmount).toLocaleString('en-IN')}` : null,
-            '',
-            '📍 *Location:* Chopariyal Gaon, Churer Dhar, Kanatal - 8500 Ft',
-            '📞 *Reception:* +91 70555 22239',
-            '',
-            '🧾 *Your official reservation voucher & billing receipt image is attached above.*'
-          ].filter(Boolean).join('\n');
-
-          const ultraImgRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/image`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              token: ultramsgToken,
-              to: cleanPhone,
-              image: receiptImageUrl,
-              caption: imageCaption
-            })
-          });
-          const imgData = await ultraImgRes.json();
-          imageSent = Boolean(imgData?.id || imgData?.sent === 'true' || imgData?.sent === true);
-          ultraResponseDetails = imgData;
-        } catch (imgErr) {
-          console.warn('UltraMsg image send notice:', imgErr);
-        }
-      }
-
-      // 2. Fallback: Only send text message if image was NOT sent
-      if (!imageSent && message) {
-        const ultraTextRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            token: ultramsgToken,
-            to: cleanPhone,
-            body: message
-          })
-        });
-        const textData = await ultraTextRes.json();
-        textSent = Boolean(textData?.id || textData?.sent === 'true' || textData?.sent === true);
-        ultraResponseDetails = textData || ultraResponseDetails;
-      }
-
-      if (imageSent || textSent) {
+      if (textSent) {
         return res.status(200).json({ 
           success: true, 
           provider: 'ultramsg', 
           recipient: cleanPhone,
-          imageSent,
           textSent,
           details: ultraResponseDetails 
         });
