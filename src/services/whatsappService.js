@@ -5,8 +5,8 @@
  * and generates 1-click direct WhatsApp links for guests and front desk.
  */
 
-export const RESORT_WHATSAPP_PRIMARY = '917055522239';
-export const RESORT_WHATSAPP_SECONDARY = '919568251581';
+export const RESORT_WHATSAPP_PRIMARY = '';
+export const RESORT_WHATSAPP_SECONDARY = '';
 
 /**
  * Normalizes phone numbers for WhatsApp API (defaults to Indian +91 if 10 digits)
