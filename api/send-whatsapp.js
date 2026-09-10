@@ -31,8 +31,8 @@ export default async function handler(req, res) {
       (process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.VITE_WHATSAPP_PHONE_NUMBER_ID || process.env.META_PHONE_NUMBER_ID)
     );
     const ultramsgConfigured = Boolean(
-      (process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID) &&
-      (process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN)
+      (process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID || 'instance191182') &&
+      (process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN || 'daoc6rj7zggjq828')
     );
     const twilioConfigured = Boolean(
       (process.env.TWILIO_ACCOUNT_SID || process.env.VITE_TWILIO_ACCOUNT_SID) &&
@@ -171,45 +171,60 @@ export default async function handler(req, res) {
     // =========================================================================
     // PROVIDER 2: UltraMsg (Instant QR scan with company's WhatsApp Business app)
     // =========================================================================
-    const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID;
-    const ultramsgToken = process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN;
+    const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID || 'instance191182';
+    const ultramsgToken = process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN || 'daoc6rj7zggjq828';
 
     if (ultramsgInstance && ultramsgToken) {
+      let imageSent = false;
+      let textSent = false;
+      let ultraResponseDetails = null;
+
+      // 1. If public receipt image URL exists, send the receipt image
       if (receiptImageUrl && receiptImageUrl.startsWith('http')) {
-        const ultraRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/image`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            token: ultramsgToken,
-            to: cleanPhone,
-            image: receiptImageUrl,
-            caption: message || `Peace at Peak Reservation Confirmed - Booking ID: ${booking?.id || ''}`
-          })
-        });
-        const ultraData = await ultraRes.json();
+        try {
+          const ultraImgRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              token: ultramsgToken,
+              to: cleanPhone,
+              image: receiptImageUrl,
+              caption: `✨ Peace at Peak Resort - Reservation Confirmed\nBooking ID: ${booking?.id || 'PAP-CONFIRMED'}`
+            })
+          });
+          const imgData = await ultraImgRes.json();
+          imageSent = Boolean(imgData?.id || imgData?.sent);
+          ultraResponseDetails = imgData;
+        } catch (imgErr) {
+          console.warn('UltraMsg image send notice:', imgErr);
+        }
+      }
+
+      // 2. Send the detailed text voucher message
+      const ultraTextRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          token: ultramsgToken,
+          to: cleanPhone,
+          body: message
+        })
+      });
+      const textData = await ultraTextRes.json();
+      textSent = Boolean(textData?.id || textData?.sent);
+      ultraResponseDetails = textData || ultraResponseDetails;
+
+      if (textSent || imageSent) {
         return res.status(200).json({ 
           success: true, 
-          provider: 'ultramsg_image', 
+          provider: 'ultramsg', 
           recipient: cleanPhone,
-          details: ultraData 
+          imageSent,
+          textSent,
+          details: ultraResponseDetails 
         });
       } else {
-        const ultraRes = await fetch(`https://api.ultramsg.com/${ultramsgInstance}/messages/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            token: ultramsgToken,
-            to: cleanPhone,
-            body: message
-          })
-        });
-        const ultraData = await ultraRes.json();
-        return res.status(200).json({ 
-          success: true, 
-          provider: 'ultramsg_text', 
-          recipient: cleanPhone,
-          details: ultraData 
-        });
+        dispatchResults.push({ provider: 'ultramsg', error: ultraResponseDetails });
       }
     }
 
