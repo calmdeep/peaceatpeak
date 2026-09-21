@@ -31,8 +31,8 @@ export default async function handler(req, res) {
       (process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.VITE_WHATSAPP_PHONE_NUMBER_ID || process.env.META_PHONE_NUMBER_ID)
     );
     const ultramsgConfigured = Boolean(
-      (process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID || 'instance191182') &&
-      (process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN || 'daoc6rj7zggjq828')
+      (process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID) &&
+      (process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN)
     );
     const twilioConfigured = Boolean(
       (process.env.TWILIO_ACCOUNT_SID || process.env.VITE_TWILIO_ACCOUNT_SID) &&
@@ -171,8 +171,8 @@ export default async function handler(req, res) {
     // =========================================================================
     // PROVIDER 2: UltraMsg (Instant QR scan with company's WhatsApp Business app)
     // =========================================================================
-    const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID || 'instance191182';
-    const ultramsgToken = process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN || 'daoc6rj7zggjq828';
+    const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || process.env.VITE_ULTRAMSG_INSTANCE_ID;
+    const ultramsgToken = process.env.ULTRAMSG_TOKEN || process.env.VITE_ULTRAMSG_TOKEN;
 
     if (ultramsgInstance && ultramsgToken) {
       let textSent = false;
@@ -287,12 +287,22 @@ export default async function handler(req, res) {
       });
     }
 
-    // If configuration credentials haven't been added yet to .env / Vercel
+    // If attempts were made but failed, or credentials haven't been added
+    const providerErrors = dispatchResults.map(d => {
+      const errDetail = typeof d.error === 'object' ? (d.error?.error || d.error?.message || JSON.stringify(d.error)) : d.error;
+      return `${d.provider}: ${errDetail}`;
+    }).filter(Boolean).join('; ');
+
+    const failureMessage = providerErrors
+      ? `WhatsApp dispatch failed (${providerErrors})`
+      : 'WhatsApp Business API credentials not yet detected in environment variables. Add WHATSAPP_CLOUD_TOKEN & WHATSAPP_PHONE_NUMBER_ID (Meta) or ULTRAMSG_INSTANCE_ID & ULTRAMSG_TOKEN (UltraMsg) in Vercel.';
+
     return res.status(200).json({
       success: false,
-      requiresConfiguration: true,
+      requiresConfiguration: dispatchResults.length === 0,
       phone: cleanPhone,
-      message: 'WhatsApp Business API credentials not yet detected in environment variables. Add WHATSAPP_CLOUD_TOKEN & WHATSAPP_PHONE_NUMBER_ID (Meta) or ULTRAMSG_INSTANCE_ID & ULTRAMSG_TOKEN (UltraMsg) in Vercel.',
+      message: failureMessage,
+      error: providerErrors || 'WhatsApp Business gateway unavailable or not configured.',
       attempted: dispatchResults
     });
 

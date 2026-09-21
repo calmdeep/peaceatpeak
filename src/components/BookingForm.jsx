@@ -16,19 +16,26 @@ import {
   Download,
   Eye,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Send,
+  MessageSquare,
+  RotateCcw
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { initiateRazorpayPayment } from '../services/razorpayService';
 import { 
   formatReservationWhatsAppMessage, 
   triggerWhatsAppWebhook,
-  dispatchAutomatedWhatsAppReceipt 
+  dispatchAutomatedWhatsAppReceipt,
+  getGuestWhatsAppUrl,
+  getResortWhatsAppUrl,
+  RESORT_WHATSAPP_PRIMARY
 } from '../services/whatsappService';
 import {
   getReceiptImageBlob,
   generateAndUploadReceiptImage,
-  downloadReceiptImage
+  downloadReceiptImage,
+  shareReceiptImageFile
 } from '../services/receiptImageService';
 
 export default function BookingForm({ preselectedRoomId }) {
@@ -75,6 +82,7 @@ export default function BookingForm({ preselectedRoomId }) {
   const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [autoSendStatus, setAutoSendStatus] = useState('idle'); // 'sending' | 'sent' | 'unconfigured' | 'failed'
+  const [autoSendError, setAutoSendError] = useState('');
 
   const payableNow = paymentOption === 'full' 
     ? bookingSummary.total 
@@ -86,6 +94,7 @@ export default function BookingForm({ preselectedRoomId }) {
     if (isSubmitted && bookingId && !autoSentWhatsApp) {
       setAutoSentWhatsApp(true);
       setAutoSendStatus('sending');
+      setAutoSendError('');
 
       const currentBooking = {
         id: bookingId,
@@ -112,13 +121,16 @@ export default function BookingForm({ preselectedRoomId }) {
         .then(apiRes => {
           if (apiRes?.success) {
             setAutoSendStatus('sent');
+            setAutoSendError('');
           } else {
             setAutoSendStatus('failed');
+            setAutoSendError(apiRes?.error || apiRes?.message || 'Gateway offline');
           }
         })
         .catch(err => {
           console.warn('Auto WhatsApp dispatch error:', err);
           setAutoSendStatus('failed');
+          setAutoSendError(err.message || 'Error communicating with WhatsApp serverless API');
         });
 
       // 2. In parallel, render local canvas for on-screen receipt preview & download
@@ -293,6 +305,10 @@ export default function BookingForm({ preselectedRoomId }) {
       tax: bookingSummary.tax
     };
 
+    const whatsAppVoucherText = formatReservationWhatsAppMessage(currentConfirmedBooking);
+    const guestWhatsAppUrl = getGuestWhatsAppUrl(formData.phone, currentConfirmedBooking);
+    const resortWhatsAppUrl = getResortWhatsAppUrl(currentConfirmedBooking);
+
     return (
       <section className="py-24 bg-bg-light min-h-[85vh] flex items-center anim-fade">
         <div className="container max-w-xl">
@@ -311,20 +327,133 @@ export default function BookingForm({ preselectedRoomId }) {
                 <span className="font-mono text-sm font-semibold text-primary-deep">{bookingId}</span>
               </div>
 
-              {/* Automated WhatsApp Confirmation Badge */}
-              <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-xs flex items-center gap-3 text-left">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <CheckCircle2 size={18} />
+              {/* WhatsApp Confirmation & 1-Click Delivery Card */}
+              {autoSendStatus === 'sent' ? (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-xs flex items-start gap-3 text-left shadow-xs">
+                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <CheckCircle2 size={19} />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-emerald-950 text-xs">
+                        Automated WhatsApp Delivered ✓
+                      </p>
+                      <span className="text-[0.62rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
+                        Live Confirmed
+                      </span>
+                    </div>
+                    <p className="text-[0.72rem] text-emerald-800 leading-relaxed">
+                      Official reservation voucher has been automatically sent to your WhatsApp number <strong>+{formData.phone}</strong>.
+                    </p>
+                    <div className="pt-1 flex flex-wrap gap-2">
+                      <a
+                        href={guestWhatsAppUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-[0.72rem] font-bold transition-all shadow-xs"
+                      >
+                        <MessageSquare size={13} /> View on WhatsApp
+                      </a>
+                      <a
+                        href={resortWhatsAppUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 text-[0.72rem] font-semibold transition-all shadow-xs"
+                      >
+                        💬 Notify Resort Concierge
+                      </a>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-emerald-950 text-xs">
-                    Reservation & Payment Sent to WhatsApp
-                  </p>
-                  <p className="text-[0.7rem] text-emerald-800 mt-0.5">
-                    Official booking confirmation voucher has been automatically sent to your WhatsApp number <strong>{formData.phone}</strong>.
-                  </p>
+              ) : autoSendStatus === 'sending' ? (
+                <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-200 text-xs flex items-center gap-3 text-left shadow-xs">
+                  <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <Loader2 size={19} className="animate-spin" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-amber-950 text-xs">
+                      Delivering Reservation Voucher to WhatsApp...
+                    </p>
+                    <p className="text-[0.72rem] text-amber-800 mt-0.5">
+                      Connecting to WhatsApp Gateway to message <strong>+{formData.phone}</strong>...
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50/70 border border-emerald-300 text-xs text-left space-y-3 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-bold text-emerald-950 text-xs sm:text-sm">
+                          Receive Reservation on WhatsApp
+                        </p>
+                        <span className="text-[0.62rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Instant Access
+                        </span>
+                      </div>
+                      <p className="text-[0.72rem] text-slate-600 mt-0.5 leading-relaxed">
+                        Tap below to immediately open your official boarding pass confirmation voucher directly in WhatsApp for <strong>+{formData.phone}</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 1-Click WhatsApp Action Buttons */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-emerald-200/60">
+                    <a
+                      href={guestWhatsAppUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md"
+                    >
+                      <MessageSquare size={15} /> 📲 Open My WhatsApp Voucher
+                    </a>
+
+                    <a
+                      href={resortWhatsAppUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-3 rounded-lg bg-white hover:bg-emerald-50 active:scale-98 text-emerald-900 border border-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-xs"
+                    >
+                      💬 Send to Resort Front Desk
+                    </a>
+                  </div>
+
+                  {/* Auto-dispatch diagnostics if subscription expired or pending */}
+                  {autoSendError && (
+                    <div className="text-[0.65rem] text-slate-500 bg-white/80 p-2 rounded border border-emerald-100 flex items-center justify-between gap-2">
+                      <span className="truncate">
+                        Gateway Notice: {autoSendError.includes('non-payment') ? 'UltraMsg subscription paused on ultramsg.com' : autoSendError}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAutoSendStatus('sending');
+                          setAutoSendError('');
+                          dispatchAutomatedWhatsAppReceipt(currentConfirmedBooking)
+                            .then(res => {
+                              if (res?.success) {
+                                setAutoSendStatus('sent');
+                              } else {
+                                setAutoSendStatus('failed');
+                                setAutoSendError(res?.error || res?.message || 'Gateway offline');
+                              }
+                            })
+                            .catch(err => {
+                              setAutoSendStatus('failed');
+                              setAutoSendError(err.message || 'Error');
+                            });
+                        }}
+                        className="text-[0.65rem] font-bold text-emerald-700 hover:underline shrink-0 flex items-center gap-1"
+                      >
+                        <RotateCcw size={10} /> Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Payment Verification Badge */}
               <div className="bg-emerald-50/80 p-4 rounded-lg border border-emerald-200 space-y-2 text-xs">

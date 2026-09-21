@@ -5,8 +5,8 @@
  * and generates 1-click direct WhatsApp links for guests and front desk.
  */
 
-export const RESORT_WHATSAPP_PRIMARY = '';
-export const RESORT_WHATSAPP_SECONDARY = '';
+export const RESORT_WHATSAPP_PRIMARY = '917055522239';
+export const RESORT_WHATSAPP_SECONDARY = '919568251581';
 
 /**
  * Normalizes phone numbers for WhatsApp API (defaults to Indian +91 if 10 digits)
@@ -237,14 +237,19 @@ export async function dispatchAutomatedWhatsAppReceipt(booking, receiptImageUrl 
         }
       })
     });
-    if (res.ok) {
-      const data = await res.json();
-      return data;
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.success) {
+      return { success: true, ...data };
     }
+    return {
+      success: false,
+      error: data?.error || data?.message || `Server returned status ${res.status}`,
+      ...data
+    };
   } catch (err) {
     console.warn('dispatchAutomatedWhatsAppReceipt notice:', err);
+    return { success: false, error: err.message || 'Network error connecting to WhatsApp API' };
   }
-  return { success: false };
 }
 
 /**
