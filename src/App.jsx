@@ -195,7 +195,7 @@ function MainApp() {
                       Explore Kanatal & Beyond
                     </h3>
                     <p className="text-text-dark-secondary text-xs leading-relaxed">
-                      Plan your treks to the Surkanda Devi Temple (10,000 ft), walks in Kodia Forest, or speed boating in Tehri Dam. We have built an interactive local tourist guide to search nearby places right here.
+                      Plan your treks to Surkanda Devi Temple (10,000 ft), walks in Kodia Forest, night illumination at Dobra Chanti Bridge, or speed boating in Tehri Dam. We have built an interactive local tourist guide to search nearby places right here.
                     </p>
                   </div>
                   
