@@ -35,7 +35,7 @@ const NEARBY_PLACES_DATA = [
   },
   {
     id: 'dobra_chanti',
-    name: 'Dobra Chanti Bridge (Night View)',
+    name: 'Dobra Chanti Bridge',
     image: '/images/dobra.webp',
     category: 'Adventure',
     distance: '42 km from resort',
@@ -131,11 +131,10 @@ export default function NearbyPlaces() {
                   key={cat}
                   type="button"
                   onClick={() => setActiveCategory(cat)}
-                  className={`px-4 py-2 text-xs font-semibold tracking-wider uppercase rounded-xl transition-all ${
-                    activeCategory === cat
+                  className={`px-4 py-2 text-xs font-semibold tracking-wider uppercase rounded-xl transition-all ${activeCategory === cat
                       ? 'bg-primary-deep text-white shadow-sm'
                       : 'bg-bg-light/80 text-text-dark-secondary hover:text-primary-deep border border-border-light'
-                  }`}
+                    }`}
                   style={{
                     fontFamily: 'var(--font-display)',
                     whiteSpace: 'nowrap'
