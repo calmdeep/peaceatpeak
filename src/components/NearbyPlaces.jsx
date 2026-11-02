@@ -36,7 +36,7 @@ const NEARBY_PLACES_DATA = [
   {
     id: 'dobra_chanti',
     name: 'Dobra Chanti Bridge (Night View)',
-    image: '/images/dobra_chanti_night.jpg',
+    image: '/images/dobra.webp',
     category: 'Adventure',
     distance: '42 km from resort',
     duration: '1 hr 15 mins scenic drive',
